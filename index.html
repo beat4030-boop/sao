@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SAO Stock - 주식 분석</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">SAO <span>Stock</span></h1>
+            <div class="header-actions">
+                <button id="themeToggle" class="icon-btn" title="테마 변경">🌙</button>
+            </div>
+        </header>
+
+        <!-- Search -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="종목명 또는 심볼 검색 (예: AAPL, 삼성전자)" autocomplete="off">
+            <button id="searchBtn" class="btn btn-primary">검색</button>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="market">시장</button>
+            <button class="tab" data-tab="watchlist">관심종목</button>
+            <button class="tab" data-tab="portfolio">포트폴리오</button>
+        </nav>
+
+        <!-- Market Tab -->
+        <section id="tab-market" class="tab-content active">
+            <!-- Stock Detail (hidden by default) -->
+            <div id="stockDetail" class="stock-detail hidden">
+                <div class="detail-header">
+                    <button id="backBtn" class="icon-btn">←</button>
+                    <div class="detail-title">
+                        <h2 id="detailName">-</h2>
+                        <span id="detailSymbol" class="symbol-badge">-</span>
+                    </div>
+                    <button id="addWatchlistBtn" class="icon-btn" title="관심종목 추가">☆</button>
+                </div>
+                <div class="price-display">
+                    <span id="detailPrice" class="price-big">-</span>
+                    <span id="detailChange" class="change">-</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="stockChart"></canvas>
+                    <div class="chart-period-btns">
+                        <button class="period-btn active" data-period="1D">1일</button>
+                        <button class="period-btn" data-period="1W">1주</button>
+                        <button class="period-btn" data-period="1M">1개월</button>
+                        <button class="period-btn" data-period="3M">3개월</button>
+                        <button class="period-btn" data-period="1Y">1년</button>
+                    </div>
+                </div>
+                <div class="stock-info-grid">
+                    <div class="info-item"><span class="label">시가</span><span id="infoOpen">-</span></div>
+                    <div class="info-item"><span class="label">고가</span><span id="infoHigh">-</span></div>
+                    <div class="info-item"><span class="label">저가</span><span id="infoLow">-</span></div>
+                    <div class="info-item"><span class="label">거래량</span><span id="infoVolume">-</span></div>
+                    <div class="info-item"><span class="label">시가총액</span><span id="infoMarketCap">-</span></div>
+                    <div class="info-item"><span class="label">52주 최고</span><span id="info52High">-</span></div>
+                </div>
+                <!-- Portfolio Add -->
+                <div class="portfolio-add">
+                    <h3>포트폴리오에 추가</h3>
+                    <div class="portfolio-form">
+                        <input type="number" id="buyQuantity" placeholder="수량" min="1">
+                        <input type="number" id="buyPrice" placeholder="매수가" min="0" step="0.01">
+                        <button id="addPortfolioBtn" class="btn btn-primary">추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Overview (shown by default) -->
+            <div id="marketOverview">
+                <h3 class="section-title">주요 지수</h3>
+                <div class="index-cards" id="indexCards">
+                    <div class="index-card">
+                        <div class="index-name">S&P 500</div>
+                        <div class="index-price" id="idx-sp500">-</div>
+                        <div class="index-change" id="idx-sp500-change">-</div>
+                    </div>
+                    <div class="index-card">
+                        <div class="index-name">NASDAQ</div>
+                        <div class="index-price" id="idx-nasdaq">-</div>
+                        <div class="index-change" id="idx-nasdaq-change">-</div>
+                    </div>
+                    <div class="index-card">
+                        <div class="index-name">KOSPI</div>
+                        <div class="index-price" id="idx-kospi">-</div>
+                        <div class="index-change" id="idx-kospi-change">-</div>
+                    </div>
+                </div>
+
+                <h3 class="section-title">인기 종목</h3>
+                <div id="popularStocks" class="stock-list">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Watchlist Tab -->
+        <section id="tab-watchlist" class="tab-content">
+            <div id="watchlistEmpty" class="empty-state">
+                <div class="empty-icon">☆</div>
+                <p>관심종목이 없습니다</p>
+                <p class="sub">종목 검색 후 ☆ 버튼으로 추가하세요</p>
+            </div>
+            <div id="watchlistItems" class="stock-list"></div>
+        </section>
+
+        <!-- Portfolio Tab -->
+        <section id="tab-portfolio" class="tab-content">
+            <div class="portfolio-summary" id="portfolioSummary">
+                <div class="summary-card">
+                    <span class="label">총 투자금</span>
+                    <span id="totalInvested" class="value">₩0</span>
+                </div>
+                <div class="summary-card">
+                    <span class="label">현재 평가액</span>
+                    <span id="totalValue" class="value">₩0</span>
+                </div>
+                <div class="summary-card">
+                    <span class="label">총 수익률</span>
+                    <span id="totalReturn" class="value change-neutral">0%</span>
+                </div>
+            </div>
+            <div id="portfolioEmpty" class="empty-state">
+                <div class="empty-icon">💼</div>
+                <p>포트폴리오가 비어있습니다</p>
+                <p class="sub">종목 상세에서 매수 정보를 추가하세요</p>
+            </div>
+            <div id="portfolioItems" class="stock-list"></div>
+        </section>
+
+        <!-- Toast notification -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
