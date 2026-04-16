@@ -1,5 +1,5 @@
 // ===== Service Worker =====
-const CACHE_NAME = 'sao-trade-v1';
+const CACHE_NAME = 'sao-trade-v2';
 const ASSETS = [
     './',
     './index.html',
@@ -16,9 +16,13 @@ const ASSETS = [
     './js/trading/indicators.js',
     './js/trading/strategy.js',
     './js/trading/risk.js',
+    './js/trading/simulator.js',
+    './js/trading/optimizer.js',
     './js/ai/model.js',
     './js/ai/trainer.js',
     './js/ai/predictor.js',
+    './js/ai/ppo.js',
+    './js/ai/pattern.js',
     './js/ui/chart.js',
     './js/ui/dashboard.js',
     './js/ui/toast.js',

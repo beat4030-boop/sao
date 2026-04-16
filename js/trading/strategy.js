@@ -126,11 +126,41 @@ export function makeDecision(techScore, aiScore = null) {
 export function generateSignal(closes, volumes, aiScore = null) {
     const tech = calcTechnicalScore(closes, volumes);
     const decision = makeDecision(tech.techScore, aiScore);
+    const tier = getBettingTier(decision.finalScore);
 
     return {
         ...decision,
+        tier,
         details: tech,
         aiScore,
         timestamp: new Date().toISOString(),
     };
 }
+
+// ===== 배팅 등급 시스템 (KADIstock 스타일) =====
+// 스코어에 따라 배팅 크기/등급 결정
+
+const TIERS = [
+    { name: '미진입', min: 0,  max: 39, betPct: 0,  color: '#666' },
+    { name: '노멀',   min: 40, max: 54, betPct: 10, color: '#aaa' },
+    { name: '레어',   min: 55, max: 64, betPct: 25, color: '#4fc3f7' },
+    { name: '유니크', min: 65, max: 74, betPct: 40, color: '#ab47bc' },
+    { name: '에픽',   min: 75, max: 84, betPct: 60, color: '#ff7043' },
+    { name: '신화',   min: 85, max: 100, betPct: 80, color: '#ffd740' },
+];
+
+/**
+ * 스코어 → 배팅 등급
+ * @param {number} score 0~100
+ * @returns {{ name, betPct, color }}
+ */
+export function getBettingTier(score) {
+    for (const tier of TIERS) {
+        if (score >= tier.min && score <= tier.max) {
+            return { ...tier };
+        }
+    }
+    return TIERS[0];
+}
+
+export { TIERS };

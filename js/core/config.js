@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
     // 매매 조건
     takeProfit: 2.0,      // 익절 %
     stopLoss: 1.0,        // 손절 %
+    trailingStop: 1.5,    // 트레일링 스탑 % (최고점 대비)
     positionSize: 10,     // 1회 투자비율 %
     maxPositions: 5,      // 최대 동시보유
     dailyMaxLoss: 3.0,    // 일일 최대 손실 %
