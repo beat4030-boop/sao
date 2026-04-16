@@ -1,0 +1,97 @@
+/* ===== Buttons ===== */
+.btn {
+    padding: 10px 18px; border: none; border-radius: 10px;
+    font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-sm { padding: 5px 12px; font-size: 0.75rem; border-radius: 6px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-success { background: var(--green); color: #000; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-accent { background: linear-gradient(135deg, var(--accent), var(--blue)); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+.btn-danger-outline { background: transparent; border: 1px solid var(--red); color: var(--red); }
+.btn-large { width: 100%; padding: 14px; font-size: 1rem; }
+
+.icon-btn {
+    background: none; border: none; font-size: 1.2rem;
+    cursor: pointer; padding: 6px; border-radius: 50%; color: var(--text-primary);
+}
+
+/* ===== AI Status ===== */
+.ai-status {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px;
+    background: var(--bg-card); border: 1px solid var(--border); font-size: 0.75rem;
+}
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-secondary); }
+.ai-status.active .ai-dot { background: var(--green); animation: pulse 1.5s infinite; }
+.ai-status.training .ai-dot { background: var(--yellow); animation: pulse 0.8s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ===== Inputs ===== */
+input, select {
+    padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg-input); color: var(--text-primary); font-size: 0.9rem; outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input::placeholder { color: var(--text-secondary); }
+
+/* ===== Toggle ===== */
+.toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--border); border-radius: 24px; transition: 0.3s;
+}
+.toggle-slider:before {
+    content: ''; position: absolute; width: 18px; height: 18px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+/* ===== Toast ===== */
+.toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff; padding: 10px 20px;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600; z-index: 200;
+    transition: opacity 0.3s; white-space: nowrap;
+}
+.toast.hidden { opacity: 0; pointer-events: none; }
+.toast.success { background: var(--green); color: #000; }
+.toast.error { background: var(--red); }
+
+/* ===== Settings ===== */
+.settings-group {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; margin-bottom: 12px;
+}
+.setting-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.setting-item:last-child { border-bottom: none; }
+.setting-item label { font-size: 0.85rem; flex-shrink: 0; margin-right: 12px; }
+.setting-item input, .setting-item select { max-width: 140px; text-align: right; }
+.toggle-item { display: flex; align-items: center; }
+
+/* ===== Search ===== */
+.search-container { display: flex; gap: 8px; margin-bottom: 4px; }
+.search-container input { flex: 1; }
+.search-results {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 14px; max-height: 200px; overflow-y: auto;
+}
+.search-result-item {
+    padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:active { background: var(--bg-secondary); }
+.sr-name { font-weight: 600; font-size: 0.9rem; }
+.sr-code { color: var(--text-secondary); font-size: 0.78rem; }
+
+/* ===== Empty State ===== */
+.empty-state { text-align: center; padding: 24px; color: var(--text-secondary); }
+.empty-state.small { padding: 14px; font-size: 0.85rem; }

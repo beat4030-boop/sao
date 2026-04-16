@@ -8,8 +8,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>SAO Trade - AI 자동매매</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
-    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/strategy.css">
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
 </head>
 <body>
@@ -22,21 +25,28 @@
                     <span class="ai-dot"></span>
                     <span class="ai-label">AI 대기</span>
                 </div>
-                <button id="themeToggle" class="icon-btn" title="테마 변경">🌙</button>
+                <button id="themeToggle" class="icon-btn" title="테마">🌙</button>
             </div>
         </header>
+
+        <!-- Connection Status -->
+        <div id="connectionBar" class="connection-bar disconnected">
+            <span class="conn-dot"></span>
+            <span id="connText">키움 미연결</span>
+            <button id="connectBtn" class="btn btn-sm">연결</button>
+        </div>
 
         <!-- Tabs -->
         <nav class="tabs">
             <button class="tab active" data-tab="dashboard">대시보드</button>
-            <button class="tab" data-tab="strategy">전략설정</button>
+            <button class="tab" data-tab="strategy">전략</button>
             <button class="tab" data-tab="backtest">백테스트</button>
-            <button class="tab" data-tab="history">수익현황</button>
+            <button class="tab" data-tab="history">수익</button>
+            <button class="tab" data-tab="settings">설정</button>
         </nav>
 
-        <!-- ===== Dashboard Tab ===== -->
+        <!-- ===== Dashboard ===== -->
         <section id="tab-dashboard" class="tab-content active">
-            <!-- Today Summary -->
             <div class="today-summary">
                 <div class="summary-card accent">
                     <span class="label">오늘 수익률</span>
@@ -44,7 +54,7 @@
                 </div>
                 <div class="summary-card">
                     <span class="label">총 자산</span>
-                    <span id="totalAsset" class="value">₩10,000,000</span>
+                    <span id="totalAsset" class="value">-</span>
                 </div>
                 <div class="summary-card">
                     <span class="label">오늘 매매</span>
@@ -57,150 +67,83 @@
                 <h3 class="section-title">AI 매매 판단</h3>
                 <div class="ai-score-display">
                     <canvas id="scoreGauge" width="200" height="120"></canvas>
-                    <div id="aiVerdict" class="ai-verdict">분석 대기중</div>
+                    <div id="aiVerdict" class="ai-verdict">분석 대기</div>
                 </div>
                 <div class="ai-factors" id="aiFactors">
-                    <div class="factor"><span class="factor-name">RSI</span><div class="factor-bar"><div class="factor-fill" style="width:0%"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor"><span class="factor-name">MACD</span><div class="factor-bar"><div class="factor-fill" style="width:0%"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor"><span class="factor-name">볼린저</span><div class="factor-bar"><div class="factor-fill" style="width:0%"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor"><span class="factor-name">거래량</span><div class="factor-bar"><div class="factor-fill" style="width:0%"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor"><span class="factor-name">AI 예측</span><div class="factor-bar"><div class="factor-fill ai" style="width:0%"></div></div><span class="factor-val">-</span></div>
+                    <div class="factor" data-key="rsi"><span class="factor-name">RSI</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
+                    <div class="factor" data-key="macd"><span class="factor-name">MACD</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
+                    <div class="factor" data-key="bb"><span class="factor-name">볼린저</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
+                    <div class="factor" data-key="vol"><span class="factor-name">거래량</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
+                    <div class="factor" data-key="ai"><span class="factor-name">AI</span><div class="factor-bar"><div class="factor-fill ai"></div></div><span class="factor-val">-</span></div>
                 </div>
             </div>
 
-            <!-- Search & Select Stock -->
+            <!-- Stock Search -->
             <div class="search-container">
-                <input type="text" id="searchInput" placeholder="종목코드 또는 이름 (예: 005930, 삼성전자)" autocomplete="off">
-                <button id="searchBtn" class="btn btn-primary">검색</button>
+                <input type="text" id="searchInput" placeholder="종목코드 (예: 005930)" autocomplete="off">
+                <button id="searchBtn" class="btn btn-primary">조회</button>
             </div>
             <div id="searchResults" class="search-results hidden"></div>
 
-            <!-- Current Position -->
+            <!-- Current Positions -->
             <div class="section">
-                <h3 class="section-title">현재 포지션</h3>
+                <h3 class="section-title">보유 종목 <span id="positionCount" class="badge">0</span></h3>
                 <div id="positionList" class="position-list">
-                    <div class="empty-state small">
-                        <p>보유 종목 없음</p>
-                    </div>
+                    <div class="empty-state small"><p>보유 종목 없음</p></div>
                 </div>
             </div>
 
             <!-- Signal Log -->
             <div class="section">
-                <h3 class="section-title">매매 신호 로그</h3>
+                <h3 class="section-title">매매 신호</h3>
                 <div id="signalLog" class="signal-log">
-                    <div class="empty-state small">
-                        <p>대기중...</p>
-                    </div>
+                    <div class="empty-state small"><p>대기중</p></div>
                 </div>
             </div>
 
-            <!-- Trading Controls -->
+            <!-- Trading Button -->
             <div class="trading-controls">
                 <button id="startTrading" class="btn btn-success btn-large">▶ 자동매매 시작</button>
                 <button id="stopTrading" class="btn btn-danger btn-large hidden">■ 자동매매 중지</button>
             </div>
         </section>
 
-        <!-- ===== Strategy Tab ===== -->
+        <!-- ===== Strategy ===== -->
         <section id="tab-strategy" class="tab-content">
             <div class="settings-group">
                 <h3 class="section-title">매매 조건</h3>
-                <div class="setting-item">
-                    <label>익절 목표 (%)</label>
-                    <input type="number" id="takeProfitPct" value="2" min="0.5" max="10" step="0.1">
-                </div>
-                <div class="setting-item">
-                    <label>손절 한도 (%)</label>
-                    <input type="number" id="stopLossPct" value="1" min="0.5" max="5" step="0.1">
-                </div>
-                <div class="setting-item">
-                    <label>1회 투자 비율 (%)</label>
-                    <input type="number" id="positionSize" value="10" min="1" max="50" step="1">
-                </div>
-                <div class="setting-item">
-                    <label>최대 동시 보유</label>
-                    <input type="number" id="maxPositions" value="5" min="1" max="10" step="1">
-                </div>
-                <div class="setting-item">
-                    <label>일일 최대 손실 (%)</label>
-                    <input type="number" id="dailyMaxLoss" value="3" min="1" max="10" step="0.5">
-                </div>
+                <div class="setting-item"><label>익절 (%)</label><input type="number" id="cfg-takeProfit" value="2" step="0.1"></div>
+                <div class="setting-item"><label>손절 (%)</label><input type="number" id="cfg-stopLoss" value="1" step="0.1"></div>
+                <div class="setting-item"><label>1회 투자비율 (%)</label><input type="number" id="cfg-positionSize" value="10" step="1"></div>
+                <div class="setting-item"><label>최대 동시보유</label><input type="number" id="cfg-maxPositions" value="5" step="1"></div>
+                <div class="setting-item"><label>일일 최대손실 (%)</label><input type="number" id="cfg-dailyMaxLoss" value="3" step="0.5"></div>
             </div>
-
             <div class="settings-group">
-                <h3 class="section-title">기술적 지표 설정</h3>
-                <div class="setting-item">
-                    <label>RSI 기간</label>
-                    <input type="number" id="rsiPeriod" value="14" min="5" max="30">
-                </div>
-                <div class="setting-item">
-                    <label>RSI 매수 기준 (이하)</label>
-                    <input type="number" id="rsiBuyThreshold" value="30" min="10" max="40">
-                </div>
-                <div class="setting-item">
-                    <label>RSI 매도 기준 (이상)</label>
-                    <input type="number" id="rsiSellThreshold" value="70" min="60" max="90">
-                </div>
-                <div class="setting-item">
-                    <label>MACD 빠른선</label>
-                    <input type="number" id="macdFast" value="12" min="5" max="20">
-                </div>
-                <div class="setting-item">
-                    <label>MACD 느린선</label>
-                    <input type="number" id="macdSlow" value="26" min="15" max="40">
-                </div>
-                <div class="setting-item">
-                    <label>MACD 시그널</label>
-                    <input type="number" id="macdSignal" value="9" min="5" max="15">
-                </div>
-                <div class="setting-item">
-                    <label>볼린저밴드 기간</label>
-                    <input type="number" id="bbPeriod" value="20" min="10" max="30">
-                </div>
+                <h3 class="section-title">기술적 지표</h3>
+                <div class="setting-item"><label>RSI 기간</label><input type="number" id="cfg-rsiPeriod" value="14"></div>
+                <div class="setting-item"><label>RSI 매수 (이하)</label><input type="number" id="cfg-rsiBuy" value="30"></div>
+                <div class="setting-item"><label>RSI 매도 (이상)</label><input type="number" id="cfg-rsiSell" value="70"></div>
+                <div class="setting-item"><label>MACD 빠른선</label><input type="number" id="cfg-macdFast" value="12"></div>
+                <div class="setting-item"><label>MACD 느린선</label><input type="number" id="cfg-macdSlow" value="26"></div>
+                <div class="setting-item"><label>MACD 시그널</label><input type="number" id="cfg-macdSignal" value="9"></div>
+                <div class="setting-item"><label>볼린저 기간</label><input type="number" id="cfg-bbPeriod" value="20"></div>
             </div>
-
             <div class="settings-group">
                 <h3 class="section-title">AI 설정</h3>
-                <div class="setting-item">
-                    <label>AI 매수 신호 기준점</label>
-                    <input type="number" id="aiBuyScore" value="70" min="50" max="90">
-                </div>
-                <div class="setting-item">
-                    <label>AI 매도 신호 기준점</label>
-                    <input type="number" id="aiSellScore" value="30" min="10" max="50">
-                </div>
-                <div class="setting-item toggle-item">
-                    <label>AI 자동 재학습</label>
-                    <label class="toggle">
-                        <input type="checkbox" id="aiAutoRetrain" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
+                <div class="setting-item"><label>매수 점수 (이상)</label><input type="number" id="cfg-aiBuyScore" value="70"></div>
+                <div class="setting-item"><label>매도 점수 (이하)</label><input type="number" id="cfg-aiSellScore" value="30"></div>
+                <div class="setting-item toggle-item"><label>자동 재학습</label><label class="toggle"><input type="checkbox" id="cfg-aiRetrain" checked><span class="toggle-slider"></span></label></div>
             </div>
-
-            <div class="settings-group">
-                <h3 class="section-title">초기 자본금</h3>
-                <div class="setting-item">
-                    <label>시작 자본 (원)</label>
-                    <input type="number" id="initialCapital" value="10000000" min="100000" step="100000">
-                </div>
-            </div>
-
-            <button id="saveSettings" class="btn btn-primary btn-large">설정 저장</button>
-            <button id="resetSettings" class="btn btn-outline btn-large">기본값 복원</button>
+            <button id="saveStrategy" class="btn btn-primary btn-large">전략 저장</button>
         </section>
 
-        <!-- ===== Backtest Tab ===== -->
+        <!-- ===== Backtest ===== -->
         <section id="tab-backtest" class="tab-content">
-            <div class="backtest-config">
+            <div class="settings-group">
+                <div class="setting-item"><label>종목코드</label><input type="text" id="bt-symbol" value="005930"></div>
                 <div class="setting-item">
-                    <label>종목코드</label>
-                    <input type="text" id="btSymbol" value="005930" placeholder="예: 005930">
-                </div>
-                <div class="setting-item">
-                    <label>테스트 기간</label>
-                    <select id="btPeriod">
+                    <label>기간</label>
+                    <select id="bt-period">
                         <option value="30">1개월</option>
                         <option value="90" selected>3개월</option>
                         <option value="180">6개월</option>
@@ -209,98 +152,78 @@
                 </div>
                 <button id="runBacktest" class="btn btn-primary btn-large">백테스트 실행</button>
             </div>
-
-            <div id="backtestResult" class="backtest-result hidden">
-                <h3 class="section-title">백테스트 결과</h3>
+            <div id="backtestResult" class="hidden">
                 <div class="bt-summary">
-                    <div class="bt-stat">
-                        <span class="label">총 수익률</span>
-                        <span id="btTotalReturn" class="value big">-</span>
-                    </div>
-                    <div class="bt-stat">
-                        <span class="label">승률</span>
-                        <span id="btWinRate" class="value">-</span>
-                    </div>
-                    <div class="bt-stat">
-                        <span class="label">총 매매</span>
-                        <span id="btTotalTrades" class="value">-</span>
-                    </div>
-                    <div class="bt-stat">
-                        <span class="label">최대 낙폭</span>
-                        <span id="btMaxDrawdown" class="value">-</span>
-                    </div>
-                    <div class="bt-stat">
-                        <span class="label">평균 수익</span>
-                        <span id="btAvgWin" class="value">-</span>
-                    </div>
-                    <div class="bt-stat">
-                        <span class="label">평균 손실</span>
-                        <span id="btAvgLoss" class="value">-</span>
-                    </div>
+                    <div class="bt-stat"><span class="label">총 수익률</span><span id="bt-return" class="value big">-</span></div>
+                    <div class="bt-stat"><span class="label">승률</span><span id="bt-winrate" class="value">-</span></div>
+                    <div class="bt-stat"><span class="label">매매수</span><span id="bt-trades" class="value">-</span></div>
+                    <div class="bt-stat"><span class="label">최대낙폭</span><span id="bt-drawdown" class="value">-</span></div>
                 </div>
-                <div class="chart-container">
-                    <canvas id="btChart"></canvas>
-                </div>
-                <div id="btTradeLog" class="signal-log"></div>
+                <div class="chart-container"><canvas id="btChart"></canvas></div>
+                <div id="btLog" class="signal-log"></div>
             </div>
-
-            <!-- AI Training -->
-            <div class="section" style="margin-top:16px">
-                <h3 class="section-title">AI 모델 학습</h3>
-                <div id="trainStatus" class="train-status">
-                    <p>모델 상태: <span id="modelStatus">미학습</span></p>
-                    <p>학습 데이터: <span id="trainDataCount">0</span>건</p>
+            <div class="section" style="margin-top:14px">
+                <h3 class="section-title">AI 모델</h3>
+                <div class="train-status">
+                    <p>상태: <span id="modelStatus">미학습</span></p>
+                    <p>데이터: <span id="trainDataCount">0</span>건</p>
                     <p>정확도: <span id="modelAccuracy">-</span></p>
                 </div>
-                <button id="trainModel" class="btn btn-accent btn-large">AI 모델 학습 시작</button>
+                <button id="trainModel" class="btn btn-accent btn-large">AI 학습 시작</button>
             </div>
         </section>
 
-        <!-- ===== History Tab ===== -->
+        <!-- ===== History ===== -->
         <section id="tab-history" class="tab-content">
             <div class="history-summary">
-                <div class="summary-card">
-                    <span class="label">누적 수익률</span>
-                    <span id="cumReturn" class="value big">0.00%</span>
-                </div>
-                <div class="summary-card">
-                    <span class="label">총 매매 횟수</span>
-                    <span id="totalTradeCount" class="value">0</span>
-                </div>
-                <div class="summary-card">
-                    <span class="label">승률</span>
-                    <span id="overallWinRate" class="value">0%</span>
-                </div>
+                <div class="summary-card"><span class="label">누적 수익률</span><span id="cumReturn" class="value big">0%</span></div>
+                <div class="summary-card"><span class="label">총 매매</span><span id="totalTradeCount" class="value">0</span></div>
+                <div class="summary-card"><span class="label">승률</span><span id="overallWinRate" class="value">0%</span></div>
             </div>
-
-            <div class="chart-container">
-                <h3 class="section-title">수익률 추이</h3>
-                <canvas id="historyChart"></canvas>
-            </div>
-
+            <div class="chart-container"><canvas id="historyChart"></canvas></div>
             <h3 class="section-title">일별 기록</h3>
-            <div id="dailyHistory" class="history-list">
-                <div class="empty-state small"><p>기록 없음</p></div>
-            </div>
-
-            <button id="exportData" class="btn btn-outline btn-large">데이터 내보내기 (CSV)</button>
-            <button id="clearHistory" class="btn btn-danger-outline btn-large" style="margin-top:8px">기록 초기화</button>
+            <div id="dailyHistory" class="history-list"><div class="empty-state small"><p>기록 없음</p></div></div>
+            <button id="exportData" class="btn btn-outline btn-large">CSV 내보내기</button>
         </section>
 
-        <!-- Toast -->
-        <div id="toast" class="toast hidden"></div>
+        <!-- ===== Settings (키움 API) ===== -->
+        <section id="tab-settings" class="tab-content">
+            <div class="settings-group">
+                <h3 class="section-title">키움 REST API 연결</h3>
+                <div class="setting-item"><label>App Key</label><input type="text" id="cfg-appKey" placeholder="발급받은 App Key"></div>
+                <div class="setting-item"><label>App Secret</label><input type="password" id="cfg-appSecret" placeholder="발급받은 App Secret"></div>
+                <div class="setting-item"><label>계좌번호</label><input type="text" id="cfg-account" placeholder="00000000-00"></div>
+                <div class="setting-item">
+                    <label>서버</label>
+                    <select id="cfg-server">
+                        <option value="virtual">모의투자</option>
+                        <option value="real">실전투자</option>
+                    </select>
+                </div>
+                <div class="setting-item"><label>CORS 프록시 URL</label><input type="text" id="cfg-proxyUrl" placeholder="(선택) https://proxy.example.com"></div>
+            </div>
+            <button id="saveApiSettings" class="btn btn-primary btn-large">API 설정 저장</button>
+            <button id="testConnection" class="btn btn-outline btn-large" style="margin-top:8px">연결 테스트</button>
 
-        <!-- Loading Overlay -->
+            <div class="settings-group" style="margin-top:14px">
+                <h3 class="section-title">초기 자본금</h3>
+                <div class="setting-item"><label>시작 자본 (원)</label><input type="number" id="cfg-capital" value="10000000" step="100000"></div>
+            </div>
+
+            <div class="settings-group" style="margin-top:14px">
+                <h3 class="section-title">데이터 관리</h3>
+                <button id="clearAllData" class="btn btn-danger-outline btn-large">전체 데이터 초기화</button>
+            </div>
+        </section>
+
+        <!-- Toast & Loading -->
+        <div id="toast" class="toast hidden"></div>
         <div id="loadingOverlay" class="loading-overlay hidden">
             <div class="spinner-large"></div>
-            <p id="loadingText">AI 학습중...</p>
+            <p id="loadingText">처리중...</p>
         </div>
     </div>
 
-    <script src="indicators.js"></script>
-    <script src="ai-model.js"></script>
-    <script src="chart.js"></script>
-    <script src="trading.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="js/core/app.js"></script>
 </body>
 </html>
