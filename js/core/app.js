@@ -97,13 +97,20 @@ function initEvents() {
 
 // ===== 전체 UI 갱신 =====
 function refreshAll() {
-    const summary = sim.getAccountSummary();
+    // 보유 포지션에 실시간 가격 시뮬레이션 적용
+    const livePrices = {};
+    const acct = sim.getAccount();
+    for (const pos of acct.positions) {
+        livePrices[pos.symbol] = simulatePrice(pos.currentPrice || pos.buyPrice);
+    }
+    const summary = sim.getAccountSummary(livePrices);
+
     // Summary bar
     setVal('realizedPnl', formatMoney(summary.realizedPnl), summary.realizedPnl);
     setVal('unrealizedPnl', formatMoney(summary.unrealizedPnl), summary.unrealizedPnl);
     setVal('winRate', summary.winRate + '%');
     setVal('posCount', summary.positions.length + '개');
-    // Positions
+    // Positions (실시간 가격 반영)
     renderPositions(summary.positions);
     // Trades
     renderTradeHistory();
@@ -112,6 +119,12 @@ function refreshAll() {
     // AI info
     renderAIInfo();
 }
+
+// 5초마다 가격 업데이트 (바 움직임)
+setInterval(() => {
+    if (!isTrading) return;
+    refreshAll();
+}, 5000);
 
 function setVal(id, text, pnl) {
     const el = document.getElementById(id);
