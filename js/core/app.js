@@ -249,40 +249,51 @@ function stopTrading() {
 
 async function runTradingCycle() {
     if (!isTrading) return;
-    const cfg = loadConfig();
-    const acct = sim.getAccount();
+    try {
+        const cfg = loadConfig();
+        const acct = sim.getAccount();
 
-    // 1) 보유 포지션 청산 체크
-    const prices = {};
-    for (const pos of acct.positions) {
-        prices[pos.symbol] = simulatePrice(pos.buyPrice);
-    }
-    const exits = sim.checkPositions(prices, cfg);
-    for (const exit of exits) {
-        sim.sell(exit.symbol, exit.price, exit.reason);
-    }
+        // 1) 보유 포지션 청산 체크
+        const prices = {};
+        for (const pos of acct.positions) {
+            prices[pos.symbol] = simulatePrice(pos.buyPrice);
+        }
+        const exits = sim.checkPositions(prices, cfg);
+        for (const exit of exits) {
+            sim.sell(exit.symbol, exit.price, exit.reason);
+        }
 
-    // 2) 신규 매수
-    if (acct.positions.length < cfg.maxPositions) {
-        const candidates = POPULAR_STOCKS.filter(s => !acct.positions.find(p => p.symbol === s.symbol));
-        const pick = candidates[Math.floor(Math.random() * candidates.length)];
-        if (pick) {
-            const daily = marketData.generateMockDaily(100);
-            const closes = daily.map(d => d.close);
-            const volumes = daily.map(d => d.volume);
-            const signal = generateSignal(closes, volumes);
-            const tier = signal.tier;
+        // 2) 신규 매수
+        if (acct.positions.length < cfg.maxPositions) {
+            const candidates = POPULAR_STOCKS.filter(s => !acct.positions.find(p => p.symbol === s.symbol));
+            const pick = candidates[Math.floor(Math.random() * Math.min(candidates.length, 5))];
+            if (pick) {
+                const daily = marketData.generateMockDaily(100);
+                const closes = daily.map(d => d.close);
+                const volumes = daily.map(d => d.volume);
 
-            // 미진입이 아니면 매수
-            if (tier.betPct > 0) {
+                let signal;
+                try { signal = generateSignal(closes, volumes); } catch(e) { signal = null; }
+
                 const price = closes[closes.length - 1];
-                const investAmt = Math.floor(acct.cash * (tier.betPct / 100));
+                // 시그널 성공하면 등급별, 실패하면 노멀(10%)로 매수
+                const betPct = (signal && signal.tier && signal.tier.betPct > 0) ? signal.tier.betPct : 10;
+                const tierName = (signal && signal.tier) ? signal.tier.name : '노멀';
+                const score = (signal) ? signal.finalScore : 50;
+
+                const investAmt = Math.floor(acct.cash * (betPct / 100));
                 const qty = Math.floor(investAmt / price);
-                if (qty > 0 && investAmt < acct.cash) {
-                    sim.buy(pick.symbol, pick.name, price, qty, pick.market, signal.finalScore, tier.name);
+                if (qty > 0 && price > 0) {
+                    const result = sim.buy(pick.symbol, pick.name, price, qty, pick.market, score, tierName);
+                    if (result.success) {
+                        toast.success(result.message);
+                    }
                 }
             }
         }
+    } catch(e) {
+        console.error('Trading cycle error:', e);
+        toast.error('매매 오류: ' + e.message);
     }
 
     refreshAll();
