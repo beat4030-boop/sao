@@ -6,6 +6,7 @@ import * as marketData from '../api/market-data.js';
 import { generateSignal, getBettingTier, TIERS } from '../trading/strategy.js';
 import { calcAllIndicators } from '../trading/indicators.js';
 import * as toast from '../ui/toast.js';
+import { POPULAR_STOCKS } from '../api/kis.js';
 
 let isTrading = false;
 let tradeInterval = null;
@@ -263,20 +264,22 @@ async function runTradingCycle() {
 
     // 2) 신규 매수
     if (acct.positions.length < cfg.maxPositions) {
-        const stocks = (await import('../api/kis.js')).POPULAR_STOCKS;
-        const candidates = stocks.filter(s => !acct.positions.find(p => p.symbol === s.symbol));
+        const candidates = POPULAR_STOCKS.filter(s => !acct.positions.find(p => p.symbol === s.symbol));
         const pick = candidates[Math.floor(Math.random() * candidates.length)];
         if (pick) {
             const daily = marketData.generateMockDaily(100);
             const closes = daily.map(d => d.close);
             const volumes = daily.map(d => d.volume);
             const signal = generateSignal(closes, volumes);
-            if (signal.action === 'buy' && signal.tier.betPct > 0) {
+            const tier = signal.tier;
+
+            // 미진입이 아니면 매수
+            if (tier.betPct > 0) {
                 const price = closes[closes.length - 1];
-                const investAmt = Math.floor(acct.cash * (signal.tier.betPct / 100));
+                const investAmt = Math.floor(acct.cash * (tier.betPct / 100));
                 const qty = Math.floor(investAmt / price);
                 if (qty > 0 && investAmt < acct.cash) {
-                    sim.buy(pick.symbol, pick.name, price, qty, pick.market, signal.finalScore, signal.tier.name);
+                    sim.buy(pick.symbol, pick.name, price, qty, pick.market, signal.finalScore, tier.name);
                 }
             }
         }
