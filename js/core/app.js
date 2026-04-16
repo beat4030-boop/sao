@@ -1,522 +1,437 @@
-// ===== 메인 앱 컨트롤러 =====
-
-import { loadConfig, saveConfig, resetConfig, FEES } from './config.js';
+// ===== SAO Trade - 메인 앱 =====
+import { loadConfig, saveConfig } from './config.js';
 import * as storage from './storage.js';
-import * as kis from '../api/kis.js';
+import * as sim from '../trading/simulator.js';
 import * as marketData from '../api/market-data.js';
-import * as engine from '../trading/engine.js';
-import * as aiModel from '../ai/model.js';
-import * as trainer from '../ai/trainer.js';
-import { getAiScore } from '../ai/predictor.js';
-import { drawGauge, drawLineChart, drawEquityCurve } from '../ui/chart.js';
-import * as dash from '../ui/dashboard.js';
+import { generateSignal, getBettingTier, TIERS } from '../trading/strategy.js';
+import { calcAllIndicators } from '../trading/indicators.js';
 import * as toast from '../ui/toast.js';
-import { backtest } from '../trading/engine.js';
+
+let isTrading = false;
+let tradeInterval = null;
 
 // ===== 초기화 =====
-
-document.addEventListener('DOMContentLoaded', async () => {
-    initTabs();
-    initTheme();
+document.addEventListener('DOMContentLoaded', () => {
+    initNav();
+    initSubTabs();
+    initClock();
+    initSakura();
     loadSettingsUI();
-    initEventListeners();
-    dash.updateHistory();
-
-    // AI 모델 로드 시도
-    const loaded = await trainer.tryLoadModel();
-    if (loaded) {
-        const info = aiModel.getModelInfo();
-        dash.updateAiStatus('active', `AI 준비 (${info.accuracy}%)`);
-        updateModelStatusUI(info);
-    }
-
-    // 매매 엔진 콜백 설정
-    engine.setCallbacks({
-        onSignalCb: (signal) => {
-            dash.addSignalLog(signal);
-            storage.addSignal(signal);
-        },
-        onPositionUpdateCb: () => {
-            refreshPositions();
-        },
-        onErrorCb: (msg) => {
-            toast.error(msg);
-            dash.addSignalLog({ type: 'info', text: `오류: ${msg}` });
-        },
-    });
-
-    // 연결 상태 초기 표시
-    const cfg = loadConfig();
-    if (cfg.appKey) {
-        dash.updateConnectionBar('disconnected', '한투 미연결 (설정탭에서 연결)');
-    } else {
-        dash.updateConnectionBar('virtual', '모의투자 모드');
-    }
-
-    // 초기 자산 표시
-    dash.updateSummary(0, cfg.capital, 0);
-    drawGauge(document.getElementById('scoreGauge'), 50);
-
-    console.log('SAO Trade initialized');
+    refreshAll();
+    initEvents();
 });
 
-// ===== 탭 관리 =====
-
-function initTabs() {
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ===== 하단 네비게이션 =====
+function initNav() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+            btn.classList.add('active');
+            const tab = document.getElementById('tab-' + btn.dataset.tab);
+            if (tab) tab.classList.add('active');
         });
     });
 }
 
-// ===== 테마 =====
+function initSubTabs() {
+    document.querySelectorAll('.sub-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const parent = btn.closest('.tab-content') || btn.closest('.card');
+            parent.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+            parent.querySelectorAll('.sub-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const sub = parent.querySelector('#sub-' + btn.dataset.sub);
+            if (sub) sub.classList.add('active');
+        });
+    });
+}
 
-function initTheme() {
-    const cfg = loadConfig();
-    if (cfg.theme === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-    }
-    document.getElementById('themeToggle').addEventListener('click', () => {
-        const cfg = loadConfig();
-        cfg.theme = cfg.theme === 'dark' ? 'light' : 'dark';
-        saveConfig(cfg);
-        if (cfg.theme === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
+// ===== 시계 =====
+function initClock() {
+    const update = () => {
+        const now = new Date();
+        const el = document.getElementById('clockDisplay');
+        if (el) el.textContent = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        const h = now.getHours(), m = now.getMinutes();
+        const isOpen = h >= 9 && (h < 15 || (h === 15 && m <= 30));
+        const badge = document.getElementById('marketState');
+        if (badge) {
+            badge.textContent = isOpen ? '정상' : '장마감';
+            badge.className = 'market-badge' + (isOpen ? '' : ' closed');
         }
-    });
+    };
+    update();
+    setInterval(update, 10000);
 }
 
-// ===== 이벤트 리스너 =====
+// ===== 벚꽃 =====
+function initSakura() {
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'js/ui/sakura.js';
+    document.body.appendChild(s);
+}
 
-function initEventListeners() {
-    // 검색
-    document.getElementById('searchBtn').addEventListener('click', handleSearch);
-    document.getElementById('searchInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleSearch();
+// ===== 이벤트 =====
+function initEvents() {
+    document.getElementById('startBtn').addEventListener('click', startTrading);
+    document.getElementById('stopBtn').addEventListener('click', stopTrading);
+    document.getElementById('saveSettings').addEventListener('click', saveSettingsUI);
+    document.getElementById('resetAccount').addEventListener('click', () => {
+        if (confirm('계좌를 초기화하시겠습니까?')) { sim.resetAccount(); refreshAll(); toast.info('초기화 완료'); }
     });
-
-    // 자동매매 시작/중지
-    document.getElementById('startTrading').addEventListener('click', startAutoTrading);
-    document.getElementById('stopTrading').addEventListener('click', stopAutoTrading);
-
-    // 전략 저장
-    document.getElementById('saveStrategy').addEventListener('click', saveStrategy);
-
-    // API 설정
-    document.getElementById('saveApiSettings').addEventListener('click', saveApiSettings);
-    document.getElementById('testConnection').addEventListener('click', testApiConnection);
-    document.getElementById('connectBtn').addEventListener('click', testApiConnection);
-
-    // 백테스트
-    document.getElementById('runBacktest').addEventListener('click', runBacktestUI);
-
-    // AI 학습
-    document.getElementById('trainModel').addEventListener('click', trainModelUI);
-
-    // 수익현황
-    document.getElementById('exportData').addEventListener('click', exportCSV);
-
-    // 데이터 초기화
-    const clearBtn = document.getElementById('clearAllData');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            if (confirm('모든 데이터를 초기화하시겠습니까?')) {
-                storage.clearAll();
-                toast.info('데이터 초기화 완료');
-                location.reload();
-            }
-        });
-    }
-
-    // 포지션 매도 버튼 (이벤트 위임)
-    document.getElementById('positionList').addEventListener('click', (e) => {
+    document.getElementById('exportCSV').addEventListener('click', exportCSV);
+    document.getElementById('runBacktest').addEventListener('click', runBacktest);
+    document.getElementById('runOptimal').addEventListener('click', runOptimalAnalysis);
+    document.getElementById('trainPPO').addEventListener('click', trainPPOUI);
+    document.getElementById('trainLSTM').addEventListener('click', trainLSTMUI);
+    document.getElementById('positionCards').addEventListener('click', (e) => {
         if (e.target.classList.contains('pos-sell-btn')) {
-            const symbol = e.target.dataset.symbol;
-            if (confirm(`${symbol} 전량 매도하시겠습니까?`)) {
-                manualSell(symbol);
-            }
+            const sym = e.target.dataset.symbol;
+            if (sym) manualSell(sym);
         }
     });
 }
 
-// ===== 검색 =====
+// ===== 전체 UI 갱신 =====
+function refreshAll() {
+    const summary = sim.getAccountSummary();
+    // Summary bar
+    setVal('realizedPnl', formatMoney(summary.realizedPnl), summary.realizedPnl);
+    setVal('unrealizedPnl', formatMoney(summary.unrealizedPnl), summary.unrealizedPnl);
+    setVal('winRate', summary.winRate + '%');
+    setVal('posCount', summary.positions.length + '개');
+    // Positions
+    renderPositions(summary.positions);
+    // Trades
+    renderTradeHistory();
+    // Daily
+    renderDailyHistory();
+    // AI info
+    renderAIInfo();
+}
 
-function handleSearch() {
-    const query = document.getElementById('searchInput').value.trim();
-    const results = kis.searchStocks(query);
-    const container = document.getElementById('searchResults');
+function setVal(id, text, pnl) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (pnl !== undefined) {
+        el.classList.remove('up', 'down');
+        el.classList.add(pnl >= 0 ? 'up' : 'down');
+    }
+}
 
-    if (results.length === 0) {
-        container.classList.add('hidden');
-        toast.info('검색 결과 없음');
+// ===== 포지션 카드 렌더링 (프로그레스바 포함) =====
+function renderPositions(positions) {
+    const container = document.getElementById('positionCards');
+    if (!positions.length) {
+        container.innerHTML = '<div class="empty-pos">보유 포지션 없음</div>';
         return;
     }
+    const cfg = loadConfig();
+    container.innerHTML = positions.map(pos => {
+        const slPrice = Math.floor(pos.buyPrice * (1 - cfg.stopLoss / 100));
+        const tpPrice = Math.ceil(pos.buyPrice * (1 + cfg.takeProfit / 100));
+        const trailPrice = pos.highPrice ? Math.floor(pos.highPrice * (1 - cfg.trailingStop / 100)) : tpPrice;
+        const curPrice = pos.currentPrice || pos.buyPrice;
+        const pnl = pos.pnl || 0;
+        const pnlPct = pos.pnlPct || 0;
+        const isUp = pnl >= 0;
+        const tier = pos.tier || '노멀';
+        // 바 비율 계산
+        const range = tpPrice - slPrice;
+        const curPct = range > 0 ? Math.max(0, Math.min(100, ((curPrice - slPrice) / range) * 100)) : 50;
+        const status = pnlPct > 1 ? '추격 매수!' : pnlPct > 0 ? '홀딩 중...' : '대기 중...';
 
-    container.innerHTML = results.map(s => `
-        <div class="search-result-item" data-symbol="${s.symbol}" data-name="${s.name}">
-            <span class="sr-name">${s.name}</span>
-            <span class="sr-code">${s.symbol} | ${s.market.toUpperCase()}</span>
-        </div>
-    `).join('');
+        return `<div class="pos-card">
+            <div class="pos-card-header">
+                <div><span class="pos-card-name">${pos.name}</span><span class="pos-card-code">${pos.symbol}</span></div>
+                <span class="tier-badge tier-${tier}">${tier}</span>
+            </div>
+            <div class="pos-card-status">${status}</div>
+            <div style="text-align:right"><button class="pos-sell-btn" data-symbol="${pos.symbol}">매도</button></div>
+            <div class="pos-bar-container">
+                <div class="pos-bar">
+                    <div class="pos-bar-sl" style="width:30%">${slPrice.toLocaleString()}</div>
+                    <div class="pos-bar-mid"></div>
+                    <div class="pos-bar-tp" style="width:15%">1차</div>
+                    <div class="pos-bar-trail" style="width:15%">${tpPrice.toLocaleString()}</div>
+                    <div class="pos-bar-current" style="left:${curPct}%"></div>
+                </div>
+                <div class="pos-bar-labels">
+                    <span class="sl-label">손절 ${slPrice.toLocaleString()} (-${cfg.stopLoss}%)</span>
+                    <span class="tp-label">익절 ${tpPrice.toLocaleString()} (${cfg.takeProfit}%)</span>
+                    <span class="trail-label">트레일 ${trailPrice.toLocaleString()}</span>
+                </div>
+            </div>
+            <div class="pos-info-row">
+                <span class="pos-info-left">매수 ${pos.buyPrice.toLocaleString()} / 현재 ${curPrice.toLocaleString()} / ${pos.qty}주</span>
+                <span class="pos-info-right ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${pnlPct.toFixed(2)}% ${isUp ? '+' : ''}${pnl.toLocaleString()}원</span>
+            </div>
+        </div>`;
+    }).join('');
+}
 
-    container.classList.remove('hidden');
+// ===== 거래 내역 =====
+function renderTradeHistory() {
+    const trades = storage.getTradeHistory().filter(t => t.type === 'sell').slice(-30).reverse();
+    const list = document.getElementById('sellHistoryList');
+    const aiLog = document.getElementById('aiTradeLog');
+    if (!trades.length) {
+        if (list) list.innerHTML = '<div class="empty-pos">매도 기록 없음</div>';
+        if (aiLog) aiLog.innerHTML = '<div class="empty-pos">거래 기록 없음</div>';
+        return;
+    }
+    const html = trades.map(t => {
+        const isUp = (t.pnl || 0) >= 0;
+        const tier = t.tier || '레어';
+        const time = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="trade-item">
+            <span class="trade-badge sell">SEL</span>
+            <div class="trade-item-info">
+                <div class="trade-item-name">${t.name || t.symbol} <span class="tier-badge tier-${tier}">${tier}</span></div>
+                <div class="trade-item-detail">${time} · ${(t.sellPrice||0).toLocaleString()}원 × ${t.qty}주 · ${t.reason||''}</div>
+            </div>
+            <div class="trade-item-pnl ${isUp ? 'up' : 'down'}">${isUp?'+':''}${(t.pnl||0).toLocaleString()}원<br><span class="trade-item-pct">${isUp?'+':''}${(t.pnlPct||0).toFixed(2)}%</span></div>
+        </div>`;
+    }).join('');
+    if (list) list.innerHTML = html;
+    if (aiLog) aiLog.innerHTML = html;
 
-    container.querySelectorAll('.search-result-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const symbol = item.dataset.symbol;
-            const name = item.dataset.name;
-            container.classList.add('hidden');
-            document.getElementById('searchInput').value = `${name} (${symbol})`;
-            toast.info(`${name} 선택됨 - 자동매매 시작 시 감시 목록에 추가됩니다`);
-        });
-    });
+    // AI거래 요약
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTrades = trades.filter(t => t.timestamp && t.timestamp.startsWith(today));
+    const wins = todayTrades.filter(t => (t.pnl || 0) > 0).length;
+    const losses = todayTrades.length - wins;
+    const totalPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+    setVal('atTrades', todayTrades.length + '건');
+    setVal('atWinLoss', `${wins}승${losses}패`);
+    setVal('atPnl', formatMoney(totalPnl), totalPnl);
+    setVal('atTotal', storage.getTradeHistory().filter(t => t.type === 'sell').length + '건');
+}
+
+// ===== 일별 기록 =====
+function renderDailyHistory() {
+    const records = storage.getDailyRecords().slice(-14).reverse();
+    const list = document.getElementById('dailyList');
+    if (!records.length) { if (list) list.innerHTML = '<div class="empty-pos">기록 없음</div>'; return; }
+    list.innerHTML = records.map(r => {
+        const isUp = (r.pnl || 0) >= 0;
+        return `<div class="daily-item">
+            <div><div class="daily-date">${r.date}</div><div class="daily-record">${r.wins||0}W ${r.losses||0}L · ${r.winRate||0}%</div></div>
+            <div style="text-align:right"><div class="daily-pnl ${isUp?'up':'down'}">${formatMoney(r.pnl||0)}</div><div class="daily-count">${r.trades||0}건</div></div>
+        </div>`;
+    }).join('');
 }
 
 // ===== 자동매매 =====
-
-function startAutoTrading() {
-    const cfg = loadConfig();
-    const searchVal = document.getElementById('searchInput').value;
-
-    // 감시 종목: 검색된 종목 + 인기 종목 상위 5개
-    let watchlist = kis.POPULAR_STOCKS.slice(0, 5).map(s => s.symbol);
-
-    // 검색에서 선택된 종목이 있으면 우선 추가
-    const match = searchVal.match(/\((\d{6})\)/);
-    if (match) {
-        watchlist.unshift(match[1]);
-        watchlist = [...new Set(watchlist)]; // 중복 제거
-    }
-
-    const aiScoreFn = aiModel.getModelInfo().isReady ? getAiScore : null;
-    engine.start(watchlist, aiScoreFn);
-
-    document.getElementById('startTrading').classList.add('hidden');
-    document.getElementById('stopTrading').classList.remove('hidden');
-
-    dash.updateConnectionBar(
-        kis.isConnected() ? 'connected' : 'virtual',
-        kis.isConnected() ? '한투 연결 - 자동매매중' : '모의투자 - 자동매매중'
-    );
-    dash.updateAiStatus(aiScoreFn ? 'active' : '', aiScoreFn ? 'AI 가동중' : 'AI 미사용');
-
+function startTrading() {
+    isTrading = true;
+    document.getElementById('startBtn').classList.add('hidden');
+    document.getElementById('stopBtn').classList.remove('hidden');
     toast.success('자동매매 시작');
+
+    runTradingCycle();
+    tradeInterval = setInterval(runTradingCycle, 15000);
 }
 
-function stopAutoTrading() {
-    engine.stop();
-
-    document.getElementById('startTrading').classList.remove('hidden');
-    document.getElementById('stopTrading').classList.add('hidden');
-
-    // 오늘 수익 저장
-    saveTodayRecord();
-
+function stopTrading() {
+    isTrading = false;
+    if (tradeInterval) { clearInterval(tradeInterval); tradeInterval = null; }
+    document.getElementById('startBtn').classList.remove('hidden');
+    document.getElementById('stopBtn').classList.add('hidden');
+    sim.resetDailyStats();
+    refreshAll();
     toast.info('자동매매 중지');
 }
 
-function manualSell(symbol) {
-    // 간이 수동 매도 (모의투자용)
-    const positions = storage.getPositions();
-    const pos = positions.find(p => p.symbol === symbol);
-    if (!pos) return;
-
-    const simulatedPrice = Math.round(pos.buyPrice * (1 + (Math.random() - 0.4) * 0.04));
-    const { calcProfit } = loadConfig().constructor ? {} : { calcProfit: null };
-
-    // 직접 import 사용
-    import('./config.js').then(({ calcProfit }) => {
-        const pnl = calcProfit(pos.buyPrice, simulatedPrice, pos.qty, pos.market || 'kospi');
-        storage.removePosition(symbol);
-
-        const cfg = loadConfig();
-        cfg.capital += simulatedPrice * pos.qty - pnl.sellCost;
-        saveConfig(cfg);
-
-        storage.addTradeRecord({
-            type: 'sell', symbol, name: pos.name,
-            qty: pos.qty, buyPrice: pos.buyPrice,
-            sellPrice: simulatedPrice, pnl: pnl.net, pnlPct: pnl.returnPct,
-            reason: '수동매도', market: pos.market,
-            buyCost: pnl.buyCost, sellCost: pnl.sellCost,
-        });
-
-        refreshPositions();
-        toast.success(`${pos.name} 매도 완료: ${pnl.net >= 0 ? '+' : ''}${pnl.net.toLocaleString()}원`);
-    });
-}
-
-function refreshPositions() {
-    const positions = storage.getPositions();
-    dash.updatePositions(positions);
-
+async function runTradingCycle() {
+    if (!isTrading) return;
     const cfg = loadConfig();
-    const trades = storage.getTradeHistory();
-    const todayTrades = trades.filter(t => t.timestamp?.startsWith(new Date().toISOString().slice(0, 10)));
-    dash.updateSummary(0, cfg.capital, todayTrades.length);
+    const acct = sim.getAccount();
+
+    // 1) 보유 포지션 청산 체크
+    const prices = {};
+    for (const pos of acct.positions) {
+        prices[pos.symbol] = simulatePrice(pos.buyPrice);
+    }
+    const exits = sim.checkPositions(prices, cfg);
+    for (const exit of exits) {
+        sim.sell(exit.symbol, exit.price, exit.reason);
+    }
+
+    // 2) 신규 매수
+    if (acct.positions.length < cfg.maxPositions) {
+        const stocks = (await import('../api/kis.js')).POPULAR_STOCKS;
+        const candidates = stocks.filter(s => !acct.positions.find(p => p.symbol === s.symbol));
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        if (pick) {
+            const daily = marketData.generateMockDaily(100);
+            const closes = daily.map(d => d.close);
+            const volumes = daily.map(d => d.volume);
+            const signal = generateSignal(closes, volumes);
+            if (signal.action === 'buy' && signal.tier.betPct > 0) {
+                const price = closes[closes.length - 1];
+                const investAmt = Math.floor(acct.cash * (signal.tier.betPct / 100));
+                const qty = Math.floor(investAmt / price);
+                if (qty > 0 && investAmt < acct.cash) {
+                    sim.buy(pick.symbol, pick.name, price, qty, pick.market, signal.finalScore, signal.tier.name);
+                }
+            }
+        }
+    }
+
+    refreshAll();
 }
 
-// ===== 전략 설정 =====
+function manualSell(symbol) {
+    const acct = sim.getAccount();
+    const pos = acct.positions.find(p => p.symbol === symbol);
+    if (!pos) return;
+    const price = simulatePrice(pos.buyPrice);
+    const result = sim.sell(symbol, price, '수동매도');
+    if (result.success) toast.success(result.message);
+    refreshAll();
+}
 
+function simulatePrice(base) {
+    return Math.round(base * (1 + (Math.random() - 0.45) * 0.04));
+}
+
+// ===== 설정 =====
 function loadSettingsUI() {
     const cfg = loadConfig();
-    const fields = {
-        'cfg-takeProfit': cfg.takeProfit,
-        'cfg-stopLoss': cfg.stopLoss,
-        'cfg-positionSize': cfg.positionSize,
-        'cfg-maxPositions': cfg.maxPositions,
-        'cfg-dailyMaxLoss': cfg.dailyMaxLoss,
-        'cfg-rsiPeriod': cfg.rsiPeriod,
-        'cfg-rsiBuy': cfg.rsiBuy,
-        'cfg-rsiSell': cfg.rsiSell,
-        'cfg-macdFast': cfg.macdFast,
-        'cfg-macdSlow': cfg.macdSlow,
-        'cfg-macdSignal': cfg.macdSignal,
-        'cfg-bbPeriod': cfg.bbPeriod,
-        'cfg-aiBuyScore': cfg.aiBuyScore,
-        'cfg-aiSellScore': cfg.aiSellScore,
-        'cfg-appKey': cfg.appKey,
-        'cfg-appSecret': cfg.appSecret,
-        'cfg-account': cfg.account,
-        'cfg-server': cfg.server,
-        'cfg-proxyUrl': cfg.proxyUrl,
-        'cfg-capital': cfg.capital,
+    const map = {
+        'cfg-takeProfit': cfg.takeProfit, 'cfg-stopLoss': cfg.stopLoss,
+        'cfg-trailingStop': cfg.trailingStop, 'cfg-positionSize': cfg.positionSize,
+        'cfg-maxPositions': cfg.maxPositions, 'cfg-dailyMaxLoss': cfg.dailyMaxLoss,
+        'cfg-rsiPeriod': cfg.rsiPeriod, 'cfg-rsiBuy': cfg.rsiBuy, 'cfg-rsiSell': cfg.rsiSell,
+        'cfg-bbPeriod': cfg.bbPeriod, 'cfg-capital': cfg.capital,
+        'cfg-macd': `${cfg.macdFast},${cfg.macdSlow},${cfg.macdSignal}`,
     };
-
-    for (const [id, val] of Object.entries(fields)) {
+    for (const [id, val] of Object.entries(map)) {
         const el = document.getElementById(id);
         if (el) el.value = val;
     }
-
-    const retrain = document.getElementById('cfg-aiRetrain');
-    if (retrain) retrain.checked = cfg.aiRetrain;
 }
 
-function saveStrategy() {
+function saveSettingsUI() {
     const cfg = loadConfig();
     cfg.takeProfit = parseFloat(document.getElementById('cfg-takeProfit').value) || 2;
     cfg.stopLoss = parseFloat(document.getElementById('cfg-stopLoss').value) || 1;
+    cfg.trailingStop = parseFloat(document.getElementById('cfg-trailingStop').value) || 1.5;
     cfg.positionSize = parseInt(document.getElementById('cfg-positionSize').value) || 10;
     cfg.maxPositions = parseInt(document.getElementById('cfg-maxPositions').value) || 5;
     cfg.dailyMaxLoss = parseFloat(document.getElementById('cfg-dailyMaxLoss').value) || 3;
     cfg.rsiPeriod = parseInt(document.getElementById('cfg-rsiPeriod').value) || 14;
     cfg.rsiBuy = parseInt(document.getElementById('cfg-rsiBuy').value) || 30;
     cfg.rsiSell = parseInt(document.getElementById('cfg-rsiSell').value) || 70;
-    cfg.macdFast = parseInt(document.getElementById('cfg-macdFast').value) || 12;
-    cfg.macdSlow = parseInt(document.getElementById('cfg-macdSlow').value) || 26;
-    cfg.macdSignal = parseInt(document.getElementById('cfg-macdSignal').value) || 9;
     cfg.bbPeriod = parseInt(document.getElementById('cfg-bbPeriod').value) || 20;
-    cfg.aiBuyScore = parseInt(document.getElementById('cfg-aiBuyScore').value) || 70;
-    cfg.aiSellScore = parseInt(document.getElementById('cfg-aiSellScore').value) || 30;
-    cfg.aiRetrain = document.getElementById('cfg-aiRetrain').checked;
-    saveConfig(cfg);
-    toast.success('전략 저장 완료');
-}
-
-function saveApiSettings() {
-    const cfg = loadConfig();
-    cfg.appKey = document.getElementById('cfg-appKey').value.trim();
-    cfg.appSecret = document.getElementById('cfg-appSecret').value.trim();
-    cfg.account = document.getElementById('cfg-account').value.trim();
-    cfg.server = document.getElementById('cfg-server').value;
-    cfg.proxyUrl = document.getElementById('cfg-proxyUrl').value.trim();
     cfg.capital = parseInt(document.getElementById('cfg-capital').value) || 10000000;
+    const macd = (document.getElementById('cfg-macd').value || '12,26,9').split(',');
+    cfg.macdFast = parseInt(macd[0]) || 12;
+    cfg.macdSlow = parseInt(macd[1]) || 26;
+    cfg.macdSignal = parseInt(macd[2]) || 9;
     saveConfig(cfg);
-    toast.success('API 설정 저장 완료');
-    dash.updateSummary(0, cfg.capital, 0);
-}
-
-async function testApiConnection() {
-    const cfg = loadConfig();
-    if (!cfg.appKey || !cfg.appSecret) {
-        toast.error('App Key / Secret을 입력하세요 (설정 탭)');
-        return;
-    }
-
-    showLoading('한투 API 연결중...');
-    try {
-        await kis.getToken();
-        dash.updateConnectionBar('connected', `한투 연결됨 (${cfg.server === 'virtual' ? '모의' : '실전'})`);
-        toast.success('한투 API 연결 성공!');
-
-        // 잔고 조회 테스트
-        try {
-            const balance = await kis.getBalance();
-            cfg.capital = balance.totalDeposit + balance.totalEval;
-            saveConfig(cfg);
-            dash.updateSummary(0, cfg.capital, 0);
-        } catch (e) {
-            console.warn('Balance fetch failed:', e);
-        }
-    } catch (e) {
-        dash.updateConnectionBar('disconnected', '연결 실패');
-        toast.error(`연결 실패: ${e.message}`);
-    }
-    hideLoading();
+    toast.success('설정 저장 완료');
 }
 
 // ===== 백테스트 =====
+async function runBacktest() {
+    const { backtest } = await import('../trading/engine.js');
+    const daily = marketData.generateMockDaily(parseInt(document.getElementById('bt-period').value) || 90);
+    const result = backtest(daily);
+    const el = document.getElementById('backtestResult');
+    el.classList.remove('hidden');
+    el.innerHTML = `<div class="card"><div class="ai-stats">
+        <div class="ai-stat"><div class="ai-stat-label">수익률</div><div class="ai-stat-val ${parseFloat(result.totalReturn)>=0?'up':'down'}">${result.totalReturn}%</div></div>
+        <div class="ai-stat"><div class="ai-stat-label">승률</div><div class="ai-stat-val">${result.winRate}%</div></div>
+        <div class="ai-stat"><div class="ai-stat-label">매매수</div><div class="ai-stat-val">${result.totalTrades}</div></div>
+        <div class="ai-stat"><div class="ai-stat-label">최대낙폭</div><div class="ai-stat-val down">-${result.maxDrawdown}%</div></div>
+    </div></div>`;
+    toast.info('백테스트 완료: ' + result.totalReturn + '%');
+}
 
-async function runBacktestUI() {
-    const symbol = document.getElementById('bt-symbol').value.trim() || '005930';
-    const days = parseInt(document.getElementById('bt-period').value) || 90;
+// ===== 최적 분석 =====
+async function runOptimalAnalysis() {
+    const { findOptimalParams } = await import('../trading/optimizer.js');
+    const result = findOptimalParams(7);
+    const el = document.getElementById('optimalResult');
+    if (!result.hasData) { el.innerHTML = '<p class="empty-pos">매매 데이터 부족</p>'; return; }
+    el.innerHTML = `<div class="optimal-result">
+        <div class="opt-card"><div class="opt-val down">-${result.optimal.stopLoss}%</div><div class="opt-label">최적 손절가</div><div class="opt-current">(현재 -${loadConfig().stopLoss}%)</div></div>
+        <div class="opt-card"><div class="opt-val down">-${result.optimal.trailing}%</div><div class="opt-label">최적 트레일</div><div class="opt-current">(현재 -${loadConfig().trailingStop}%)</div></div>
+    </div>
+    <div class="ai-stats">
+        <div class="ai-stat"><div class="ai-stat-label">실제손익</div><div class="ai-stat-val ${result.actualPnl>=0?'up':'down'}">${formatMoney(result.actualPnl)}</div></div>
+        <div class="ai-stat"><div class="ai-stat-label">최적손익</div><div class="ai-stat-val ${result.optimalPnl>=0?'up':'down'}">${formatMoney(result.optimalPnl)}</div></div>
+        <div class="ai-stat"><div class="ai-stat-label">차이</div><div class="ai-stat-val up">+${formatMoney(result.diff)}</div></div>
+    </div>`;
+    toast.info('최적 분석 완료');
+}
 
-    showLoading('백테스트 실행중...');
+// ===== AI =====
+function renderAIInfo() {
+    // PPO & Pattern info from storage
+    const ppoMeta = storage.load('ppo_meta', { totalExperience: 0, winRate: '0', avgReward: '0', actionDist: [0,0,0,0,0,0] });
+    setVal('ppoExp', (ppoMeta.totalExperience || 0) + '건');
+    setVal('ppoWin', (ppoMeta.winRate || '0') + '%');
+    setVal('ppoReward', (ppoMeta.avgReward || '0') + '%');
 
+    const patterns = storage.load('patterns', []);
+    const patWins = patterns.filter(p => p.result > 0).length;
+    setVal('patternCount', patterns.length + '건');
+    setVal('patternWin', patterns.length > 0 ? ((patWins/patterns.length)*100).toFixed(1) + '%' : '0%');
+    setVal('patternAvg', patterns.length > 0 ? (patterns.reduce((s,p)=>s+p.result,0)/patterns.length).toFixed(2) + '%' : '0%');
+    setVal('patternNum', Math.min(patterns.length, 10) + '개');
+}
+
+async function trainPPOUI() {
+    toast.info('PPO 학습은 매매 경험 30건 이상 필요합니다');
     try {
-        let dailyData;
-        if (kis.isConnected()) {
-            dailyData = await marketData.fetchDailyData(symbol, days + 60);
-        } else {
-            dailyData = marketData.generateMockDaily(days + 60);
-        }
-
-        const result = backtest(dailyData);
-
-        // 결과 표시
-        document.getElementById('backtestResult').classList.remove('hidden');
-        document.getElementById('bt-return').textContent = `${result.totalReturn}%`;
-        document.getElementById('bt-return').className = `value big ${parseFloat(result.totalReturn) >= 0 ? 'up' : 'down'}`;
-        document.getElementById('bt-winrate').textContent = `${result.winRate}%`;
-        document.getElementById('bt-trades').textContent = result.totalTrades;
-        document.getElementById('bt-drawdown').textContent = `-${result.maxDrawdown}%`;
-
-        // 차트
-        drawEquityCurve(document.getElementById('btChart'), result.equityCurve);
-
-        // 매매 로그
-        const logEl = document.getElementById('btLog');
-        if (logEl) {
-            logEl.innerHTML = result.trades.slice(-30).map(t => {
-                if (t.type === 'buy') {
-                    return `<div class="signal-item buy">
-                        <span class="signal-time">${t.date}</span>
-                        <span class="signal-text">매수 ${t.qty}주 @ ${t.price.toLocaleString()}</span>
-                        <span class="signal-badge buy">매수</span>
-                    </div>`;
-                } else {
-                    return `<div class="signal-item sell">
-                        <span class="signal-time">${t.date}</span>
-                        <span class="signal-text">${t.reason} ${t.qty}주 ${t.pnlPct >= 0 ? '+' : ''}${t.pnlPct.toFixed(2)}%</span>
-                        <span class="signal-badge sell">매도</span>
-                    </div>`;
-                }
-            }).join('');
-        }
-
-        toast.success(`백테스트 완료: ${result.totalReturn}% 수익률`);
-    } catch (e) {
-        toast.error(`백테스트 실패: ${e.message}`);
-    }
-
-    hideLoading();
+        const ppo = await import('../ai/ppo.js');
+        await ppo.train((e, t) => {});
+        toast.success('PPO 학습 완료');
+        renderAIInfo();
+    } catch (e) { toast.error(e.message); }
 }
 
-// ===== AI 학습 =====
-
-async function trainModelUI() {
-    const symbol = document.getElementById('bt-symbol').value.trim() || '005930';
-
-    showLoading('AI 학습 준비중...');
-    dash.updateAiStatus('training', 'AI 학습중');
-
+async function trainLSTMUI() {
+    const { train } = await import('../ai/model.js');
+    const daily = marketData.generateMockDaily(365);
+    const closes = daily.map(d => d.close);
+    const volumes = daily.map(d => d.volume);
     try {
-        const result = await trainer.trainOnSymbol(
-            symbol,
-            kis.isConnected(),
-            (epoch, total, loss, acc) => {
-                document.getElementById('loadingText').textContent =
-                    `AI 학습중... ${epoch}/${total} (정확도: ${(acc * 100).toFixed(1)}%)`;
-            }
-        );
-
-        updateModelStatusUI(result);
-        dash.updateAiStatus('active', `AI 준비 (${result.accuracy}%)`);
-        toast.success(`AI 학습 완료! 정확도: ${result.accuracy}%`);
-    } catch (e) {
-        dash.updateAiStatus('', 'AI 학습실패');
-        toast.error(`학습 실패: ${e.message}`);
-    }
-
-    hideLoading();
+        showLoading('LSTM 학습중...');
+        const result = await train(closes, volumes, (ep, total) => {
+            document.getElementById('loadingText').textContent = `학습중 ${ep}/${total}`;
+        });
+        setVal('lstmStatus', '학습완료');
+        setVal('lstmData', result.trainCount);
+        setVal('lstmAcc', result.accuracy + '%');
+        hideLoading();
+        toast.success('LSTM 학습 완료: ' + result.accuracy + '%');
+    } catch (e) { hideLoading(); toast.error(e.message); }
 }
 
-function updateModelStatusUI(info) {
-    const status = document.getElementById('modelStatus');
-    const count = document.getElementById('trainDataCount');
-    const acc = document.getElementById('modelAccuracy');
-
-    if (status) status.textContent = info.isReady !== false ? '학습완료' : '미학습';
-    if (count) count.textContent = info.trainCount || 0;
-    if (acc) acc.textContent = info.accuracy ? `${info.accuracy}%` : '-';
-}
-
-// ===== 수익 기록 =====
-
-function saveTodayRecord() {
-    const trades = storage.getTradeHistory();
-    const today = new Date().toISOString().slice(0, 10);
-    const todayTrades = trades.filter(t => t.timestamp?.startsWith(today) && t.type === 'sell');
-    const totalPnl = todayTrades.reduce((s, t) => s + (t.pnl || 0), 0);
-    const cfg = loadConfig();
-
-    storage.saveDailyRecord({
-        trades: todayTrades.length,
-        pnl: totalPnl,
-        returnPct: cfg.capital > 0 ? (totalPnl / cfg.capital * 100) : 0,
-    });
-
-    dash.updateHistory();
-}
-
-// ===== CSV 내보내기 =====
-
+// ===== CSV =====
 function exportCSV() {
     const trades = storage.getTradeHistory();
-    if (trades.length === 0) {
-        toast.info('내보낼 데이터 없음');
-        return;
-    }
-
-    const header = '시간,구분,종목,수량,매수가,매도가,수수료(매수),수수료+세금(매도),순수익,수익률,사유\n';
-    const rows = trades.map(t => {
-        return [
-            t.timestamp, t.type === 'buy' ? '매수' : '매도',
-            `${t.name}(${t.symbol})`, t.qty,
-            t.buyPrice || t.price || '', t.sellPrice || '',
-            t.buyCost || '', t.sellCost || '',
-            t.pnl || '', t.pnlPct ? t.pnlPct.toFixed(2) + '%' : '',
-            t.reason || '',
-        ].join(',');
-    }).join('\n');
-
-    const blob = new Blob(['\ufeff' + header + rows], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sao_trades_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    toast.success('CSV 다운로드 완료');
+    if (!trades.length) { toast.info('데이터 없음'); return; }
+    const header = '시간,구분,종목,수량,매수가,매도가,손익,수익률,등급,사유\n';
+    const rows = trades.map(t => [t.timestamp, t.type, t.name||t.symbol, t.qty, t.buyPrice||t.price||'', t.sellPrice||'', t.pnl||'', (t.pnlPct||'')+'%', t.tier||'', t.reason||''].join(',')).join('\n');
+    const blob = new Blob(['\ufeff'+header+rows], {type:'text/csv'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `sao_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    toast.success('CSV 다운로드');
 }
 
-// ===== 로딩 =====
-
-function showLoading(text = '처리중...') {
-    const el = document.getElementById('loadingOverlay');
-    const textEl = document.getElementById('loadingText');
-    if (el) el.classList.remove('hidden');
-    if (textEl) textEl.textContent = text;
+// ===== 유틸 =====
+function formatMoney(n) {
+    if (n === undefined || n === null) return '0원';
+    const abs = Math.abs(Math.round(n));
+    return (n >= 0 ? '+' : '-') + abs.toLocaleString() + '원';
 }
-
-function hideLoading() {
-    const el = document.getElementById('loadingOverlay');
-    if (el) el.classList.add('hidden');
-}
+function showLoading(t) { document.getElementById('loadingOverlay').classList.remove('hidden'); document.getElementById('loadingText').textContent = t; }
+function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }

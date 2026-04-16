@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0a0a1a">
+    <meta name="theme-color" content="#1a0a1e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>SAO Trade - AI 자동매매</title>
+    <title>SAO Trade</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -16,205 +15,219 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
 </head>
 <body>
+    <!-- Cherry Blossom Canvas -->
+    <canvas id="sakura"></canvas>
+
     <div id="app">
         <!-- Header -->
         <header class="header">
-            <h1 class="logo">SAO <span>Trade</span></h1>
-            <div class="header-actions">
-                <div id="aiStatus" class="ai-status">
-                    <span class="ai-dot"></span>
-                    <span class="ai-label">AI 대기</span>
-                </div>
-                <button id="themeToggle" class="icon-btn" title="테마">🌙</button>
+            <h1 class="logo">SAO<span>trade</span></h1>
+            <div class="header-right">
+                <span id="marketState" class="market-badge closed">장마감</span>
+                <span id="clockDisplay" class="clock">--:--</span>
+                <span class="live-dot">LIVE</span>
             </div>
         </header>
 
-        <!-- Connection Status -->
-        <div id="connectionBar" class="connection-bar disconnected">
-            <span class="conn-dot"></span>
-            <span id="connText">한투 미연결</span>
-            <button id="connectBtn" class="btn btn-sm">연결</button>
+        <!-- Index Ticker -->
+        <div class="index-ticker" id="indexTicker">
+            <div class="idx"><div class="idx-name">KOSDAQ</div><div class="idx-val" id="i-kosdaq">-</div><div class="idx-chg up" id="i-kosdaq-c">-</div></div>
+            <div class="idx"><div class="idx-name">KOSPI</div><div class="idx-val" id="i-kospi">-</div><div class="idx-chg up" id="i-kospi-c">-</div></div>
+            <div class="idx"><div class="idx-name">NASDAQ</div><div class="idx-val" id="i-nasdaq">-</div><div class="idx-chg up" id="i-nasdaq-c">-</div></div>
+            <div class="idx"><div class="idx-name">S&P500</div><div class="idx-val" id="i-sp">-</div><div class="idx-chg up" id="i-sp-c">-</div></div>
         </div>
 
-        <!-- Tabs -->
-        <nav class="tabs">
-            <button class="tab active" data-tab="dashboard">대시보드</button>
-            <button class="tab" data-tab="strategy">전략</button>
-            <button class="tab" data-tab="backtest">백테스트</button>
-            <button class="tab" data-tab="history">수익</button>
-            <button class="tab" data-tab="settings">설정</button>
-        </nav>
+        <!-- Summary Bar -->
+        <div class="summary-bar">
+            <div class="sum-item"><div class="sum-label">실현손익</div><div id="realizedPnl" class="sum-val">0원</div><div id="realizedPct" class="sum-sub">0%</div></div>
+            <div class="sum-item"><div class="sum-label">평가손익</div><div id="unrealizedPnl" class="sum-val">0원</div></div>
+            <div class="sum-item"><div class="sum-label">승률</div><div id="winRate" class="sum-val">0%</div></div>
+            <div class="sum-item"><div class="sum-label">포지션</div><div id="posCount" class="sum-val">0개</div></div>
+            <div class="sum-item"><div class="sum-label">틱감시</div><div id="tickCount" class="sum-val">0개</div></div>
+        </div>
 
-        <!-- ===== Dashboard ===== -->
-        <section id="tab-dashboard" class="tab-content active">
-            <div class="today-summary">
-                <div class="summary-card accent">
-                    <span class="label">오늘 수익률</span>
-                    <span id="todayReturn" class="value big">0.00%</span>
+        <!-- Tab Contents -->
+        <div class="tab-body">
+            <!-- ===== 홈 ===== -->
+            <section id="tab-home" class="tab-content active">
+                <div class="card">
+                    <div class="card-title">시장 상태</div>
+                    <div class="market-info">
+                        <div><span class="big">KOSDAQ</span><br><span id="h-kosdaq">-</span><br><span class="up" id="h-kosdaq-c">-</span></div>
+                        <div class="market-condition" id="marketCondition"><span class="cond-dot"></span>보통장</div>
+                    </div>
                 </div>
-                <div class="summary-card">
-                    <span class="label">총 자산</span>
-                    <span id="totalAsset" class="value">-</span>
+                <div class="card">
+                    <div class="card-title">이용 가능 검색식</div>
+                    <div class="filter-chips">
+                        <button class="chip active" data-filter="급등주">급등주</button>
+                        <button class="chip" data-filter="오늘주도주">오늘주도주</button>
+                        <button class="chip" data-filter="거래급등">거래급등</button>
+                        <button class="chip" data-filter="거래량폭발">거래량폭발</button>
+                        <button class="chip" data-filter="매집돌파">매집돌파</button>
+                    </div>
                 </div>
-                <div class="summary-card">
-                    <span class="label">오늘 매매</span>
-                    <span id="todayTrades" class="value">0건</span>
+                <div class="card">
+                    <div class="card-title">AI vs 주인님 - 오늘 대결</div>
+                    <div class="vs-panel">
+                        <div class="vs-side">
+                            <div class="vs-icon">👤</div>
+                            <div class="vs-label">주인님</div>
+                            <div id="userPnl" class="vs-val">0%</div>
+                            <div id="userRecord" class="vs-sub">0승 0패</div>
+                        </div>
+                        <div class="vs-sword">⚔</div>
+                        <div class="vs-side">
+                            <div class="vs-icon">🤖</div>
+                            <div class="vs-label">AI</div>
+                            <div id="aiPnl" class="vs-val">0%</div>
+                            <div id="aiRecord" class="vs-sub">0승 0패</div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-
-            <!-- AI Score -->
-            <div class="ai-score-panel">
-                <h3 class="section-title">AI 매매 판단</h3>
-                <div class="ai-score-display">
-                    <canvas id="scoreGauge" width="200" height="120"></canvas>
-                    <div id="aiVerdict" class="ai-verdict">분석 대기</div>
+                <div class="trading-controls">
+                    <button id="startBtn" class="btn btn-success btn-large">▶ 자동매매 시작</button>
+                    <button id="stopBtn" class="btn btn-danger btn-large hidden">■ 자동매매 중지</button>
                 </div>
-                <div class="ai-factors" id="aiFactors">
-                    <div class="factor" data-key="rsi"><span class="factor-name">RSI</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor" data-key="macd"><span class="factor-name">MACD</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor" data-key="bb"><span class="factor-name">볼린저</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor" data-key="vol"><span class="factor-name">거래량</span><div class="factor-bar"><div class="factor-fill"></div></div><span class="factor-val">-</span></div>
-                    <div class="factor" data-key="ai"><span class="factor-name">AI</span><div class="factor-bar"><div class="factor-fill ai"></div></div><span class="factor-val">-</span></div>
+            </section>
+
+            <!-- ===== 포지션 ===== -->
+            <section id="tab-positions" class="tab-content">
+                <div id="positionCards" class="position-cards">
+                    <div class="empty-pos">보유 포지션 없음</div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Stock Search -->
-            <div class="search-container">
-                <input type="text" id="searchInput" placeholder="종목코드 (예: 005930)" autocomplete="off">
-                <button id="searchBtn" class="btn btn-primary">조회</button>
-            </div>
-            <div id="searchResults" class="search-results hidden"></div>
-
-            <!-- Current Positions -->
-            <div class="section">
-                <h3 class="section-title">보유 종목 <span id="positionCount" class="badge">0</span></h3>
-                <div id="positionList" class="position-list">
-                    <div class="empty-state small"><p>보유 종목 없음</p></div>
+            <!-- ===== 거래 ===== -->
+            <section id="tab-trades" class="tab-content">
+                <div class="sub-tabs">
+                    <button class="sub-tab active" data-sub="sellHistory">매도내역</button>
+                    <button class="sub-tab" data-sub="regret">후회분석 😢</button>
                 </div>
-            </div>
-
-            <!-- Signal Log -->
-            <div class="section">
-                <h3 class="section-title">매매 신호</h3>
-                <div id="signalLog" class="signal-log">
-                    <div class="empty-state small"><p>대기중</p></div>
+                <div id="sub-sellHistory" class="sub-content active">
+                    <div id="sellHistoryList" class="trade-list">
+                        <div class="empty-pos">매도 기록 없음</div>
+                    </div>
                 </div>
-            </div>
-
-            <!-- Trading Button -->
-            <div class="trading-controls">
-                <button id="startTrading" class="btn btn-success btn-large">▶ 자동매매 시작</button>
-                <button id="stopTrading" class="btn btn-danger btn-large hidden">■ 자동매매 중지</button>
-            </div>
-        </section>
-
-        <!-- ===== Strategy ===== -->
-        <section id="tab-strategy" class="tab-content">
-            <div class="settings-group">
-                <h3 class="section-title">매매 조건</h3>
-                <div class="setting-item"><label>익절 (%)</label><input type="number" id="cfg-takeProfit" value="2" step="0.1"></div>
-                <div class="setting-item"><label>손절 (%)</label><input type="number" id="cfg-stopLoss" value="1" step="0.1"></div>
-                <div class="setting-item"><label>1회 투자비율 (%)</label><input type="number" id="cfg-positionSize" value="10" step="1"></div>
-                <div class="setting-item"><label>최대 동시보유</label><input type="number" id="cfg-maxPositions" value="5" step="1"></div>
-                <div class="setting-item"><label>일일 최대손실 (%)</label><input type="number" id="cfg-dailyMaxLoss" value="3" step="0.5"></div>
-            </div>
-            <div class="settings-group">
-                <h3 class="section-title">기술적 지표</h3>
-                <div class="setting-item"><label>RSI 기간</label><input type="number" id="cfg-rsiPeriod" value="14"></div>
-                <div class="setting-item"><label>RSI 매수 (이하)</label><input type="number" id="cfg-rsiBuy" value="30"></div>
-                <div class="setting-item"><label>RSI 매도 (이상)</label><input type="number" id="cfg-rsiSell" value="70"></div>
-                <div class="setting-item"><label>MACD 빠른선</label><input type="number" id="cfg-macdFast" value="12"></div>
-                <div class="setting-item"><label>MACD 느린선</label><input type="number" id="cfg-macdSlow" value="26"></div>
-                <div class="setting-item"><label>MACD 시그널</label><input type="number" id="cfg-macdSignal" value="9"></div>
-                <div class="setting-item"><label>볼린저 기간</label><input type="number" id="cfg-bbPeriod" value="20"></div>
-            </div>
-            <div class="settings-group">
-                <h3 class="section-title">AI 설정</h3>
-                <div class="setting-item"><label>매수 점수 (이상)</label><input type="number" id="cfg-aiBuyScore" value="70"></div>
-                <div class="setting-item"><label>매도 점수 (이하)</label><input type="number" id="cfg-aiSellScore" value="30"></div>
-                <div class="setting-item toggle-item"><label>자동 재학습</label><label class="toggle"><input type="checkbox" id="cfg-aiRetrain" checked><span class="toggle-slider"></span></label></div>
-            </div>
-            <button id="saveStrategy" class="btn btn-primary btn-large">전략 저장</button>
-        </section>
-
-        <!-- ===== Backtest ===== -->
-        <section id="tab-backtest" class="tab-content">
-            <div class="settings-group">
-                <div class="setting-item"><label>종목코드</label><input type="text" id="bt-symbol" value="005930"></div>
-                <div class="setting-item">
-                    <label>기간</label>
-                    <select id="bt-period">
-                        <option value="30">1개월</option>
-                        <option value="90" selected>3개월</option>
-                        <option value="180">6개월</option>
-                        <option value="365">1년</option>
-                    </select>
+                <div id="sub-regret" class="sub-content">
+                    <div id="regretList" class="trade-list">
+                        <div class="empty-pos">분석 데이터 없음</div>
+                    </div>
                 </div>
-                <button id="runBacktest" class="btn btn-primary btn-large">백테스트 실행</button>
-            </div>
-            <div id="backtestResult" class="hidden">
-                <div class="bt-summary">
-                    <div class="bt-stat"><span class="label">총 수익률</span><span id="bt-return" class="value big">-</span></div>
-                    <div class="bt-stat"><span class="label">승률</span><span id="bt-winrate" class="value">-</span></div>
-                    <div class="bt-stat"><span class="label">매매수</span><span id="bt-trades" class="value">-</span></div>
-                    <div class="bt-stat"><span class="label">최대낙폭</span><span id="bt-drawdown" class="value">-</span></div>
+            </section>
+
+            <!-- ===== 승률 ===== -->
+            <section id="tab-winrate" class="tab-content">
+                <div class="card">
+                    <div class="card-title">놀림목 깊이 분석</div>
+                    <div class="sub-tabs">
+                        <button class="sub-tab active" data-sub="simToday">시뮬 오늘</button>
+                        <button class="sub-tab" data-sub="sim5d">시뮬 5일</button>
+                    </div>
+                    <div id="optimalResult" class="optimal-panel">
+                        <p class="empty-pos">분석 실행 필요</p>
+                    </div>
+                    <button id="runOptimal" class="btn btn-primary btn-large">최적 조합 분석</button>
                 </div>
-                <div class="chart-container"><canvas id="btChart"></canvas></div>
-                <div id="btLog" class="signal-log"></div>
-            </div>
-            <div class="section" style="margin-top:14px">
-                <h3 class="section-title">AI 모델</h3>
-                <div class="train-status">
-                    <p>상태: <span id="modelStatus">미학습</span></p>
-                    <p>데이터: <span id="trainDataCount">0</span>건</p>
-                    <p>정확도: <span id="modelAccuracy">-</span></p>
+            </section>
+
+            <!-- ===== 통계 ===== -->
+            <section id="tab-stats" class="tab-content">
+                <div class="sub-tabs">
+                    <button class="sub-tab active" data-sub="daily">일별손익</button>
+                    <button class="sub-tab" data-sub="backtest">백테스트</button>
                 </div>
-                <button id="trainModel" class="btn btn-accent btn-large">AI 학습 시작</button>
-            </div>
-        </section>
-
-        <!-- ===== History ===== -->
-        <section id="tab-history" class="tab-content">
-            <div class="history-summary">
-                <div class="summary-card"><span class="label">누적 수익률</span><span id="cumReturn" class="value big">0%</span></div>
-                <div class="summary-card"><span class="label">총 매매</span><span id="totalTradeCount" class="value">0</span></div>
-                <div class="summary-card"><span class="label">승률</span><span id="overallWinRate" class="value">0%</span></div>
-            </div>
-            <div class="chart-container"><canvas id="historyChart"></canvas></div>
-            <h3 class="section-title">일별 기록</h3>
-            <div id="dailyHistory" class="history-list"><div class="empty-state small"><p>기록 없음</p></div></div>
-            <button id="exportData" class="btn btn-outline btn-large">CSV 내보내기</button>
-        </section>
-
-        <!-- ===== Settings (KIS API) ===== -->
-        <section id="tab-settings" class="tab-content">
-            <div class="settings-group">
-                <h3 class="section-title">한국투자증권 REST API 연결</h3>
-                <div class="setting-item"><label>App Key</label><input type="text" id="cfg-appKey" placeholder="KIS App Key"></div>
-                <div class="setting-item"><label>App Secret</label><input type="password" id="cfg-appSecret" placeholder="KIS App Secret"></div>
-                <div class="setting-item"><label>계좌번호</label><input type="text" id="cfg-account" placeholder="00000000-00"></div>
-                <div class="setting-item">
-                    <label>서버</label>
-                    <select id="cfg-server">
-                        <option value="virtual">모의투자</option>
-                        <option value="real">실전투자</option>
-                    </select>
+                <div id="sub-daily" class="sub-content active">
+                    <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+                    <div id="dailyList" class="daily-list"><div class="empty-pos">기록 없음</div></div>
                 </div>
-                <div class="setting-item"><label>CORS 프록시 URL</label><input type="text" id="cfg-proxyUrl" placeholder="(선택) https://proxy.example.com"></div>
-            </div>
-            <button id="saveApiSettings" class="btn btn-primary btn-large">API 설정 저장</button>
-            <button id="testConnection" class="btn btn-outline btn-large" style="margin-top:8px">연결 테스트</button>
+                <div id="sub-backtest" class="sub-content">
+                    <div class="settings-group">
+                        <div class="setting-item"><label>종목코드</label><input type="text" id="bt-symbol" value="005930"></div>
+                        <div class="setting-item"><label>기간</label><select id="bt-period"><option value="30">1개월</option><option value="90" selected>3개월</option><option value="365">1년</option></select></div>
+                        <button id="runBacktest" class="btn btn-primary btn-large">백테스트 실행</button>
+                    </div>
+                    <div id="backtestResult" class="hidden"></div>
+                </div>
+            </section>
 
-            <div class="settings-group" style="margin-top:14px">
-                <h3 class="section-title">초기 자본금</h3>
-                <div class="setting-item"><label>시작 자본 (원)</label><input type="number" id="cfg-capital" value="10000000" step="100000"></div>
-            </div>
+            <!-- ===== AI ===== -->
+            <section id="tab-ai" class="tab-content">
+                <div class="card">
+                    <div class="card-title">🤖 PPO 강화학습 에이전트</div>
+                    <div class="ai-stats">
+                        <div class="ai-stat"><div class="ai-stat-label">RL 경험</div><div id="ppoExp" class="ai-stat-val">0건</div></div>
+                        <div class="ai-stat"><div class="ai-stat-label">승률</div><div id="ppoWin" class="ai-stat-val">0%</div></div>
+                        <div class="ai-stat"><div class="ai-stat-label">평균보상</div><div id="ppoReward" class="ai-stat-val">0%</div></div>
+                    </div>
+                    <div id="ppoActionDist" class="action-dist"></div>
+                    <button id="trainPPO" class="btn btn-accent btn-large">🤖 PPO 즉시 학습 실행</button>
+                </div>
+                <div class="card">
+                    <div class="card-title">📊 SmartCollector - AI 패턴 학습</div>
+                    <div class="ai-stats">
+                        <div class="ai-stat"><div class="ai-stat-label">데이터</div><div id="patternCount" class="ai-stat-val">0건</div></div>
+                        <div class="ai-stat"><div class="ai-stat-label">승률</div><div id="patternWin" class="ai-stat-val">0%</div></div>
+                        <div class="ai-stat"><div class="ai-stat-label">평균수익</div><div id="patternAvg" class="ai-stat-val">0%</div></div>
+                        <div class="ai-stat"><div class="ai-stat-label">패턴수</div><div id="patternNum" class="ai-stat-val">0개</div></div>
+                    </div>
+                    <div class="progress-bar"><div id="modelPerf" class="progress-fill" style="width:0%"></div><span id="modelPerfText">0%</span></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">🧠 LSTM 신경망</div>
+                    <div class="train-status">
+                        <p>상태: <span id="lstmStatus">미학습</span></p>
+                        <p>데이터: <span id="lstmData">0</span>건</p>
+                        <p>정확도: <span id="lstmAcc">-</span></p>
+                    </div>
+                    <button id="trainLSTM" class="btn btn-accent btn-large">🧠 LSTM 학습 시작</button>
+                </div>
+            </section>
 
-            <div class="settings-group" style="margin-top:14px">
-                <h3 class="section-title">데이터 관리</h3>
-                <button id="clearAllData" class="btn btn-danger-outline btn-large">전체 데이터 초기화</button>
-            </div>
-        </section>
+            <!-- ===== AI거래 ===== -->
+            <section id="tab-aitrade" class="tab-content">
+                <div class="card">
+                    <div class="card-title">📋 AI 에이전트 - 거래 내역</div>
+                    <div class="ai-trade-summary">
+                        <div class="ats"><div class="ats-label">오늘 거래</div><div id="atTrades" class="ats-val">0건</div></div>
+                        <div class="ats"><div class="ats-label">오늘 승패</div><div id="atWinLoss" class="ats-val">0승0패</div></div>
+                        <div class="ats"><div class="ats-label">오늘 손익</div><div id="atPnl" class="ats-val">0원</div></div>
+                        <div class="ats"><div class="ats-label">총 거래</div><div id="atTotal" class="ats-val">0건</div></div>
+                    </div>
+                </div>
+                <div id="aiTradeLog" class="trade-list">
+                    <div class="empty-pos">거래 기록 없음</div>
+                </div>
+            </section>
+
+            <!-- ===== 설정 ===== -->
+            <section id="tab-settings" class="tab-content">
+                <div class="settings-group">
+                    <div class="card-title">매매 조건</div>
+                    <div class="setting-item"><label>익절 (%)</label><input type="number" id="cfg-takeProfit" value="2" step="0.1"></div>
+                    <div class="setting-item"><label>손절 (%)</label><input type="number" id="cfg-stopLoss" value="1" step="0.1"></div>
+                    <div class="setting-item"><label>트레일링 (%)</label><input type="number" id="cfg-trailingStop" value="1.5" step="0.1"></div>
+                    <div class="setting-item"><label>1회 투자비율 (%)</label><input type="number" id="cfg-positionSize" value="10"></div>
+                    <div class="setting-item"><label>최대 동시보유</label><input type="number" id="cfg-maxPositions" value="5"></div>
+                    <div class="setting-item"><label>일일 최대손실 (%)</label><input type="number" id="cfg-dailyMaxLoss" value="3"></div>
+                </div>
+                <div class="settings-group">
+                    <div class="card-title">기술적 지표</div>
+                    <div class="setting-item"><label>RSI 기간</label><input type="number" id="cfg-rsiPeriod" value="14"></div>
+                    <div class="setting-item"><label>RSI 매수 (이하)</label><input type="number" id="cfg-rsiBuy" value="30"></div>
+                    <div class="setting-item"><label>RSI 매도 (이상)</label><input type="number" id="cfg-rsiSell" value="70"></div>
+                    <div class="setting-item"><label>MACD 빠른/느린/시그널</label><input type="text" id="cfg-macd" value="12,26,9"></div>
+                    <div class="setting-item"><label>볼린저 기간</label><input type="number" id="cfg-bbPeriod" value="20"></div>
+                </div>
+                <div class="settings-group">
+                    <div class="card-title">자본금</div>
+                    <div class="setting-item"><label>시작 자본 (원)</label><input type="number" id="cfg-capital" value="10000000" step="100000"></div>
+                </div>
+                <button id="saveSettings" class="btn btn-primary btn-large">설정 저장</button>
+                <button id="resetAccount" class="btn btn-danger-outline btn-large" style="margin-top:8px">계좌 초기화</button>
+                <button id="exportCSV" class="btn btn-outline btn-large" style="margin-top:8px">CSV 내보내기</button>
+            </section>
+        </div>
 
         <!-- Toast & Loading -->
         <div id="toast" class="toast hidden"></div>
@@ -223,6 +236,18 @@
             <p id="loadingText">처리중...</p>
         </div>
     </div>
+
+    <!-- Bottom Tab Bar -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-tab="home"><span class="nav-icon">◇</span><span>홈</span></button>
+        <button class="nav-btn" data-tab="positions"><span class="nav-icon">▣</span><span>포지션</span></button>
+        <button class="nav-btn" data-tab="trades"><span class="nav-icon">≡</span><span>거래</span></button>
+        <button class="nav-btn" data-tab="winrate"><span class="nav-icon">△</span><span>승률</span></button>
+        <button class="nav-btn" data-tab="stats"><span class="nav-icon">⌒</span><span>통계</span></button>
+        <button class="nav-btn" data-tab="ai"><span class="nav-icon">🤖</span><span>AI</span></button>
+        <button class="nav-btn" data-tab="aitrade"><span class="nav-icon">📋</span><span>AI거래</span></button>
+        <button class="nav-btn" data-tab="settings"><span class="nav-icon">⊞</span><span>설정</span></button>
+    </nav>
 
     <script type="module" src="js/core/app.js"></script>
 </body>
