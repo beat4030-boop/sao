@@ -231,9 +231,23 @@ function startTrading() {
     isTrading = true;
     document.getElementById('startBtn').classList.add('hidden');
     document.getElementById('stopBtn').classList.remove('hidden');
-    toast.success('자동매매 시작');
+    toast.success('자동매매 시작!');
 
-    runTradingCycle();
+    // 즉시 테스트 매수
+    try {
+        const pick = POPULAR_STOCKS[Math.floor(Math.random() * 5)];
+        const price = 50000 + Math.floor(Math.random() * 30000);
+        const acct = sim.getAccount();
+        const qty = Math.floor((acct.cash * 0.1) / price);
+        if (qty > 0) {
+            const r = sim.buy(pick.symbol, pick.name, price, qty, pick.market, 65, '레어');
+            toast.success(r.message || '매수 완료');
+        }
+    } catch(e) {
+        toast.error('매수 에러: ' + e.message);
+    }
+
+    refreshAll();
     tradeInterval = setInterval(runTradingCycle, 15000);
 }
 
