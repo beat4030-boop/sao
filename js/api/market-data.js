@@ -1,7 +1,7 @@
 // ===== 시세 데이터 가공 =====
 // API에서 받은 원시 데이터를 지표 계산 및 차트에 맞게 가공
 
-import * as kiwoom from './kiwoom.js';
+import * as kis from './kis.js';
 
 /**
  * 종목의 최근 N일 일봉 데이터 가져오기
@@ -12,14 +12,14 @@ import * as kiwoom from './kiwoom.js';
 export async function fetchDailyData(symbol, days = 100) {
     const endDate = formatDate(new Date());
     const startDate = formatDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
-    return kiwoom.getDailyChart(symbol, startDate, endDate);
+    return kis.getDailyChart(symbol, startDate, endDate);
 }
 
 /**
  * 종목의 당일 분봉 데이터
  */
 export async function fetchMinuteData(symbol) {
-    return kiwoom.getMinuteChart(symbol);
+    return kis.getMinuteChart(symbol);
 }
 
 /**
@@ -31,7 +31,7 @@ export async function fetchMultiplePrices(symbols) {
     // 순차 호출 (API 초당 제한 고려)
     for (const sym of symbols) {
         try {
-            results[sym] = await kiwoom.getPrice(sym);
+            results[sym] = await kis.getPrice(sym);
             // API 초당 호출 제한 방지 (20건/초)
             await sleep(60);
         } catch (e) {

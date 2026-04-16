@@ -1,6 +1,6 @@
-// ===== 키움증권 REST API 모듈 =====
+// ===== 한국투자증권(KIS) REST API 모듈 =====
 // 모의투자/실전투자 모드 지원
-// 참고: 브라우저에서 직접 호출 시 CORS 프록시 필요
+// KIS Developers: https://apiportal.koreainvestment.com
 
 import { loadConfig } from '../core/config.js';
 
@@ -237,7 +237,7 @@ export async function getBalance() {
 }
 
 // ===== 종목 검색 (간이) =====
-// 키움 API에는 종목 검색이 별도로 없으므로 로컬 데이터 사용
+// 로컬 인기 종목 데이터 기반 검색
 const POPULAR_STOCKS = [
     { symbol: '005930', name: '삼성전자', market: 'kospi' },
     { symbol: '000660', name: 'SK하이닉스', market: 'kospi' },

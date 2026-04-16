@@ -3,7 +3,7 @@
 
 import { loadConfig, calcProfit } from '../core/config.js';
 import * as storage from '../core/storage.js';
-import * as kiwoom from '../api/kiwoom.js';
+import * as kis from '../api/kis.js';
 import * as marketData from '../api/market-data.js';
 import { generateSignal } from './strategy.js';
 import { checkPositionExit, calcPositionAmount, calcBuyQty, canOpenPosition, checkDailyLossLimit } from './risk.js';
@@ -60,7 +60,7 @@ async function runCycle(watchlist, getAiScore) {
 
     try {
         const cfg = loadConfig();
-        const useApi = kiwoom.isConnected();
+        const useApi = kis.isConnected();
 
         // 1. 보유 포지션 청산 체크
         await checkExitPositions(useApi);
@@ -97,7 +97,7 @@ async function checkExitPositions(useApi) {
         try {
             let currentPrice;
             if (useApi) {
-                const priceData = await kiwoom.getPrice(pos.symbol);
+                const priceData = await kis.getPrice(pos.symbol);
                 currentPrice = priceData.price;
             } else {
                 // 모의: 약간의 변동 시뮬레이션
@@ -183,13 +183,13 @@ async function analyzeAndTrade(symbol, useApi, getAiScore) {
 async function executeBuy(symbol, qty, price, useApi, signal) {
     try {
         if (useApi) {
-            await kiwoom.buyOrder(symbol, qty, 0); // 시장가
+            await kis.buyOrder(symbol, qty, 0); // 시장가
         }
 
-        const market = kiwoom.getStockMarket(symbol);
+        const market = kis.getStockMarket(symbol);
         const position = {
             symbol,
-            name: kiwoom.POPULAR_STOCKS.find(s => s.symbol === symbol)?.name || symbol,
+            name: kis.POPULAR_STOCKS.find(s => s.symbol === symbol)?.name || symbol,
             buyPrice: price,
             qty,
             market,
@@ -226,7 +226,7 @@ async function executeBuy(symbol, qty, price, useApi, signal) {
 async function executeExit(position, currentPrice, pnl, reason, useApi) {
     try {
         if (useApi) {
-            await kiwoom.sellOrder(position.symbol, position.qty, 0); // 시장가
+            await kis.sellOrder(position.symbol, position.qty, 0); // 시장가
         }
 
         storage.removePosition(position.symbol);

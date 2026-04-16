@@ -2,7 +2,7 @@
 // 모든 설정값의 기본값과 localStorage 동기화
 
 const DEFAULT_CONFIG = {
-    // 키움 API
+    // 한국투자증권 API
     appKey: '',
     appSecret: '',
     account: '',
@@ -39,7 +39,7 @@ const DEFAULT_CONFIG = {
 
 // 수수료/세금 (2026년 기준, 변경 불가)
 export const FEES = {
-    // 키움증권 HTS/모바일 수수료
+    // 한국투자증권 수수료
     buyCommission: 0.00015,     // 매수 수수료 0.015%
     sellCommission: 0.00015,    // 매도 수수료 0.015%
 

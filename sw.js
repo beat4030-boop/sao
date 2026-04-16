@@ -10,7 +10,7 @@ const ASSETS = [
     './js/core/app.js',
     './js/core/config.js',
     './js/core/storage.js',
-    './js/api/kiwoom.js',
+    './js/api/kis.js',
     './js/api/market-data.js',
     './js/trading/engine.js',
     './js/trading/indicators.js',
@@ -43,7 +43,7 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
     // API 호출은 캐시하지 않음
-    if (e.request.url.includes('openapi') || e.request.url.includes('koreainvestment')) {
+    if (e.request.url.includes('koreainvestment')) {
         return;
     }
     e.respondWith(

@@ -2,7 +2,7 @@
 
 import { loadConfig, saveConfig, resetConfig, FEES } from './config.js';
 import * as storage from './storage.js';
-import * as kiwoom from '../api/kiwoom.js';
+import * as kis from '../api/kis.js';
 import * as marketData from '../api/market-data.js';
 import * as engine from '../trading/engine.js';
 import * as aiModel from '../ai/model.js';
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 연결 상태 초기 표시
     const cfg = loadConfig();
     if (cfg.appKey) {
-        dash.updateConnectionBar('disconnected', '키움 미연결 (설정탭에서 연결)');
+        dash.updateConnectionBar('disconnected', '한투 미연결 (설정탭에서 연결)');
     } else {
         dash.updateConnectionBar('virtual', '모의투자 모드');
     }
@@ -149,7 +149,7 @@ function initEventListeners() {
 
 function handleSearch() {
     const query = document.getElementById('searchInput').value.trim();
-    const results = kiwoom.searchStocks(query);
+    const results = kis.searchStocks(query);
     const container = document.getElementById('searchResults');
 
     if (results.length === 0) {
@@ -185,7 +185,7 @@ function startAutoTrading() {
     const searchVal = document.getElementById('searchInput').value;
 
     // 감시 종목: 검색된 종목 + 인기 종목 상위 5개
-    let watchlist = kiwoom.POPULAR_STOCKS.slice(0, 5).map(s => s.symbol);
+    let watchlist = kis.POPULAR_STOCKS.slice(0, 5).map(s => s.symbol);
 
     // 검색에서 선택된 종목이 있으면 우선 추가
     const match = searchVal.match(/\((\d{6})\)/);
@@ -201,8 +201,8 @@ function startAutoTrading() {
     document.getElementById('stopTrading').classList.remove('hidden');
 
     dash.updateConnectionBar(
-        kiwoom.isConnected() ? 'connected' : 'virtual',
-        kiwoom.isConnected() ? '키움 연결 - 자동매매중' : '모의투자 - 자동매매중'
+        kis.isConnected() ? 'connected' : 'virtual',
+        kis.isConnected() ? '한투 연결 - 자동매매중' : '모의투자 - 자동매매중'
     );
     dash.updateAiStatus(aiScoreFn ? 'active' : '', aiScoreFn ? 'AI 가동중' : 'AI 미사용');
 
@@ -339,15 +339,15 @@ async function testApiConnection() {
         return;
     }
 
-    showLoading('키움 API 연결중...');
+    showLoading('한투 API 연결중...');
     try {
-        await kiwoom.getToken();
-        dash.updateConnectionBar('connected', `키움 연결됨 (${cfg.server === 'virtual' ? '모의' : '실전'})`);
-        toast.success('키움 API 연결 성공!');
+        await kis.getToken();
+        dash.updateConnectionBar('connected', `한투 연결됨 (${cfg.server === 'virtual' ? '모의' : '실전'})`);
+        toast.success('한투 API 연결 성공!');
 
         // 잔고 조회 테스트
         try {
-            const balance = await kiwoom.getBalance();
+            const balance = await kis.getBalance();
             cfg.capital = balance.totalDeposit + balance.totalEval;
             saveConfig(cfg);
             dash.updateSummary(0, cfg.capital, 0);
@@ -371,7 +371,7 @@ async function runBacktestUI() {
 
     try {
         let dailyData;
-        if (kiwoom.isConnected()) {
+        if (kis.isConnected()) {
             dailyData = await marketData.fetchDailyData(symbol, days + 60);
         } else {
             dailyData = marketData.generateMockDaily(days + 60);
@@ -429,7 +429,7 @@ async function trainModelUI() {
     try {
         const result = await trainer.trainOnSymbol(
             symbol,
-            kiwoom.isConnected(),
+            kis.isConnected(),
             (epoch, total, loss, acc) => {
                 document.getElementById('loadingText').textContent =
                     `AI 학습중... ${epoch}/${total} (정확도: ${(acc * 100).toFixed(1)}%)`;
