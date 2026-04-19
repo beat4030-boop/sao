@@ -1,0 +1,10 @@
+{
+    "name": "배송파셀 - 택배 자동화",
+    "short_name": "배송파셀",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#06c755",
+    "theme_color": "#06c755",
+    "orientation": "portrait",
+    "icons": [{"src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%2306c755' width='100' height='100' rx='20'/><text x='50' y='68' font-size='55' text-anchor='middle'>📦</text></svg>","sizes":"any","type":"image/svg+xml"}]
+}

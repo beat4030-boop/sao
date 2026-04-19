@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#06c755">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>배송파셀 - 택배 자동화</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- ===== 로그인 ===== -->
+        <section id="page-login" class="page active">
+            <div class="login-container">
+                <div class="login-logo">📦</div>
+                <h1 class="login-title">배송파셀</h1>
+                <p class="login-sub">택배 자동화 시스템</p>
+                <div class="login-buttons">
+                    <button class="btn btn-worker" onclick="login('worker')">👷 알바 입장</button>
+                    <button class="btn btn-boss" onclick="login('boss')">👔 사장 입장</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 알바 화면 ===== -->
+        <section id="page-worker" class="page">
+            <header class="top-bar">
+                <span class="top-title">📦 주문 접수</span>
+                <button class="btn-sm btn-outline" onclick="logout()">나가기</button>
+            </header>
+
+            <!-- 주문 입력 폼 -->
+            <div class="form-card">
+                <h3>📷 주소 입력</h3>
+                <div class="photo-upload">
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+                    <button class="btn btn-photo" onclick="document.getElementById('photoInput').click()">📷 사진 촬영 / 선택</button>
+                    <div id="photoPreview" class="photo-preview hidden"></div>
+                </div>
+                <div class="form-group">
+                    <label>받는분 이름 *</label>
+                    <input type="text" id="recipientName" placeholder="홍길동">
+                </div>
+                <div class="form-group">
+                    <label>전화번호 *</label>
+                    <input type="tel" id="recipientPhone" placeholder="010-1234-5678">
+                </div>
+                <div class="form-group">
+                    <label>우편번호</label>
+                    <input type="text" id="recipientZip" placeholder="12345">
+                </div>
+                <div class="form-group">
+                    <label>주소 *</label>
+                    <input type="text" id="recipientAddr" placeholder="서울시 강남구 테헤란로 123">
+                </div>
+                <div class="form-group">
+                    <label>상세주소</label>
+                    <input type="text" id="recipientAddr2" placeholder="101동 202호">
+                </div>
+            </div>
+
+            <div class="form-card">
+                <h3>📦 상품 정보</h3>
+                <div class="form-group">
+                    <label>상품명 *</label>
+                    <input type="text" id="productName" list="productList" placeholder="상품 검색 또는 입력">
+                    <datalist id="productList"></datalist>
+                </div>
+                <div class="form-group">
+                    <label>수량</label>
+                    <input type="number" id="productQty" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>메모 (선택)</label>
+                    <input type="text" id="orderMemo" placeholder="요청사항">
+                </div>
+            </div>
+
+            <button class="btn btn-submit" onclick="submitOrder()">📤 주문 전송</button>
+
+            <!-- 오늘 내가 보낸 주문 -->
+            <div class="section">
+                <h3 class="section-title">오늘 보낸 주문 <span id="workerOrderCount" class="badge">0</span></h3>
+                <div id="workerOrderList" class="order-list"></div>
+            </div>
+        </section>
+
+        <!-- ===== 사장 화면 ===== -->
+        <section id="page-boss" class="page">
+            <header class="top-bar">
+                <span class="top-title">👔 주문 관리</span>
+                <button class="btn-sm btn-outline" onclick="logout()">나가기</button>
+            </header>
+
+            <!-- 요약 -->
+            <div class="summary-bar">
+                <div class="sum-item"><div class="sum-label">오늘 주문</div><div id="bossTotal" class="sum-val">0건</div></div>
+                <div class="sum-item"><div class="sum-label">포장 대기</div><div id="bossPending" class="sum-val">0건</div></div>
+                <div class="sum-item"><div class="sum-label">완료</div><div id="bossDone" class="sum-val">0건</div></div>
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="action-bar">
+                <button class="btn btn-excel" onclick="downloadExcel()">📊 로이스파셀 엑셀</button>
+                <button class="btn btn-upload" onclick="document.getElementById('cjExcelInput').click()">📥 송장번호 업로드</button>
+                <input type="file" id="cjExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="uploadTrackingNumbers(this)">
+            </div>
+            <div class="action-bar">
+                <button class="btn btn-print" onclick="printAllLabels()">🖨 송장 일괄출력</button>
+                <button class="btn btn-product-manage" onclick="showProductManager()">📋 상품 관리</button>
+            </div>
+
+            <!-- 주문 리스트 -->
+            <div class="section">
+                <h3 class="section-title">주문 목록</h3>
+                <div id="bossOrderList" class="order-list"></div>
+            </div>
+        </section>
+
+        <!-- ===== 상품 관리 모달 ===== -->
+        <div id="productModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📋 상품 관리</h3>
+                    <button class="modal-close" onclick="closeProductModal()">✕</button>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="newProductName" placeholder="새 상품명 입력">
+                    <button class="btn btn-sm btn-add" onclick="addProduct()">추가</button>
+                </div>
+                <div id="productManagerList" class="product-list"></div>
+            </div>
+        </div>
+
+        <!-- ===== 송장 출력 (인쇄 전용) ===== -->
+        <div id="printArea" class="print-area"></div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="js/core/storage.js"></script>
+    <script src="js/core/app.js"></script>
+</body>
+</html>
